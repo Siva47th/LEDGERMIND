@@ -345,7 +345,7 @@ function App() {
 
                     {stats.category_spend && stats.category_spend.length > 0 ? (
                       <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                        <div style={{ width: '200px', height: '200px' }}>
+                        <div style={{ width: '200px', height: '200px', flexShrink: 0, overflow: 'hidden', outline: 'none' }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                               <Pie

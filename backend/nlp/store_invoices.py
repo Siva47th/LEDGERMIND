@@ -11,7 +11,7 @@ from backend.nlp.extractor import extract_fields
 DB_NAME = "finsense.db"
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), DB_NAME)
 
-STARTING_BALANCE = 100000.0  # Assumed starting balance of the business (₹1,00,000.00)
+STARTING_BALANCE = 250000.0  # Assumed starting balance of the business (₹2,50,000.00)
 BALANCE_ALERT_THRESHOLD = 10000.0  # Alert threshold for business strain (₹10,000.00)
 
 def parse_and_store_invoices():

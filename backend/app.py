@@ -26,7 +26,7 @@ UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_u
 # Create temporary upload folder if it doesn't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-STARTING_BALANCE = 100000.0  # Rs. 1,00,000.00
+STARTING_BALANCE = 250000.0  # Rs. 2,50,000.00
 BALANCE_ALERT_THRESHOLD = 10000.0  # Rs. 10,000.00
 
 def get_db_connection():

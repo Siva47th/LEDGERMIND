@@ -660,3 +660,12 @@
 .empty-state-subtitle {
   font-size: 0.85rem;
 }
+
+/* Strip outlines and scrollbars from Recharts charts */
+.recharts-wrapper, 
+.recharts-surface,
+.recharts-responsive-container {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
