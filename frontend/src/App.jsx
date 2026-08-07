@@ -278,59 +278,57 @@ function App() {
             {activeTab === 'dashboard' && (
               <>
                 {/* Balance + Metrics Row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
                   
                   {/* Ledger Mesh Balance Card */}
-                  <div className="mesh-balance-card">
+                  <div className="mesh-balance-card" style={{ height: 'auto', minHeight: '130px' }}>
                     <div>
                       <div className="balance-label">
                         <DollarSign size={14} />
                         <span>Cash Balance Ledger</span>
                       </div>
-                      <div className="balance-amount">
+                      <div className="balance-amount" style={{ fontSize: '1.8rem', margin: '0.25rem 0' }}>
                         Rs.{stats.current_balance ? stats.current_balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                       </div>
                     </div>
-                    <div className="balance-footer">
-                      <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Risk Threshold: Rs.10,000.00</span>
-                      <span className={`balance-status-indicator ${stats.risk_status}`}>
+                    <div className="balance-footer" style={{ marginTop: '0.5rem', paddingTop: '0.5rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Risk Threshold: Rs.10,000.00</span>
+                      <span className={`balance-status-indicator ${stats.risk_status}`} style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}>
                         {stats.risk_status}
                       </span>
                     </div>
                   </div>
 
                   {/* Summary Metric Cards */}
-                  <div className="metrics-grid">
-                    <div className="glass-card metric-mini-card">
-                      <div className="metric-icon-box blue">
-                        <TrendingDown size={20} />
-                      </div>
-                      <div className="metric-details">
-                        <span className="metric-detail-label">Total Outflow</span>
-                        <span className="metric-detail-value">Rs.{stats.total_spent ? stats.total_spent.toLocaleString() : '0'}</span>
-                      </div>
+                  <div className="glass-card metric-mini-card">
+                    <div className="metric-icon-box blue">
+                      <TrendingDown size={20} />
                     </div>
-
-                    <div className="glass-card metric-mini-card">
-                      <div className="metric-icon-box indigo">
-                        <FileCheck size={20} />
-                      </div>
-                      <div className="metric-details">
-                        <span className="metric-detail-label">Total Invoices</span>
-                        <span className="metric-detail-value">{stats.total_invoices}</span>
-                      </div>
+                    <div className="metric-details">
+                      <span className="metric-detail-label">Total Outflow</span>
+                      <span className="metric-detail-value">Rs.{stats.total_spent ? stats.total_spent.toLocaleString() : '0'}</span>
                     </div>
+                  </div>
 
-                    <div className="glass-card metric-mini-card">
-                      <div className="metric-icon-box green">
-                        <CheckCircle size={20} />
-                      </div>
-                      <div className="metric-details">
-                        <span className="metric-detail-label">Safety Margin</span>
-                        <span className="metric-detail-value" style={{ color: stats.risk_status === 'healthy' ? '#34d399' : '#f87171' }}>
-                          {stats.risk_status === 'healthy' ? 'Sufficient' : 'Critical'}
-                        </span>
-                      </div>
+                  <div className="glass-card metric-mini-card">
+                    <div className="metric-icon-box indigo">
+                      <FileCheck size={20} />
+                    </div>
+                    <div className="metric-details">
+                      <span className="metric-detail-label">Total Invoices</span>
+                      <span className="metric-detail-value">{stats.total_invoices}</span>
+                    </div>
+                  </div>
+
+                  <div className="glass-card metric-mini-card">
+                    <div className="metric-icon-box green">
+                      <CheckCircle size={20} />
+                    </div>
+                    <div className="metric-details">
+                      <span className="metric-detail-label">Safety Margin</span>
+                      <span className="metric-detail-value" style={{ color: stats.risk_status === 'healthy' ? '#34d399' : '#f87171' }}>
+                        {stats.risk_status === 'healthy' ? 'Sufficient' : 'Critical'}
+                      </span>
                     </div>
                   </div>
 

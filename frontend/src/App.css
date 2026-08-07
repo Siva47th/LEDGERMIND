@@ -229,13 +229,13 @@
   background: radial-gradient(circle at 100% 0%, #1e1b4b 0%, #312e81 30%, #0f172a 100%);
   border: 1px solid rgba(99, 102, 241, 0.2);
   border-radius: 24px;
-  padding: 2.25rem;
+  padding: 1.5rem;
   overflow: hidden;
   box-shadow: 0 16px 32px rgba(99, 102, 241, 0.12);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  height: 180px;
+  height: auto;
 }
 
 .mesh-balance-card::before {
@@ -262,7 +262,7 @@
 
 .balance-amount {
   font-family: 'Outfit', sans-serif;
-  font-size: 2.5rem;
+  font-size: 1.8rem;
   font-weight: 800;
   color: white;
   margin: 0.5rem 0;
