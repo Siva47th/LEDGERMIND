@@ -11,22 +11,30 @@ from PIL import Image
 
 def preprocess_image_for_ocr(image):
     """
-    Applies image preprocessing techniques using OpenCV to clean the document 
-    and maximize Tesseract OCR character recognition accuracy.
-    
-    Steps:
-    1. Convert to Grayscale
-    2. Apply Deskewing (if tilted)
-    3. Apply OTSU Binarization / Thresholding (convert to high-contrast black & white)
+    Applies image preprocessing using OpenCV to optimize character recognition.
+    For digital screenshots and high-quality scans, Tesseract performs best 
+    when given the color image, allowing its internal Leptonica engine to segment colors.
     """
-    # Step 1: Grayscale conversion (if not already grayscale)
-    if len(image.shape) == 3:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = image.copy()
-
-    # Step 2: Deskewing (aligning tilted scans)
+    # Step 1: Scale up the image if the width is less than 2000 pixels
+    # (resizing is crucial for mobile payment screenshots and low-res images)
     try:
+        height, width = image.shape[:2]
+        if width < 2000:
+            scale_factor = 2.0
+            dim = (int(width * scale_factor), int(height * scale_factor))
+            image = cv2.resize(image, dim, interpolation=cv2.INTER_CUBIC)
+            print(f"[OCR Preprocess] Resized image to {dim} (2x scale) using cubic interpolation.")
+    except Exception as e:
+        print(f"[OCR Preprocess] Resizing failed: {e}")
+
+    # Step 2: Apply Deskewing (if tilted)
+    try:
+        # Generate temporary grayscale for skew detection
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image.copy()
+            
         # Threshold the image to find text blocks
         thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
         
@@ -48,16 +56,15 @@ def preprocess_image_for_ocr(image):
             (h, w) = image.shape[:2]
             center = (w // 2, h // 2)
             M = cv2.getRotationMatrix2D(center, angle, 1.0)
-            gray = cv2.warpAffine(gray, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+            # Apply rotation directly to the color image to preserve color detail
+            image = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
             print(f"[OCR Preprocess] Deskewed image by {angle:.2f} degrees.")
     except Exception as e:
         print(f"[OCR Preprocess] Deskew failed (skipping): {e}")
 
-    # Step 3: Thresholding/Binarization
-    # Apply Otsu's thresholding to get clean, crisp black and white text characters
-    processed = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    
-    return processed
+    # We return the color image (or grayscaled if it was single channel).
+    # This preserves color boundaries which are lost in binary thresholding.
+    return image
 
 def extract_text_from_image(file_path):
     """

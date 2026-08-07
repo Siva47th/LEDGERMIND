@@ -13,7 +13,10 @@ CATEGORY_KEYWORDS = {
 # Known vendors lookup for high accuracy (optional fallback)
 KNOWN_VENDORS = [
     "IFET College of Engineering",
+    "Cashfree Care",
     "Cashfree Payments",
+    "Cashfree",
+    "Sirphire",
     "Google Cloud",
     "AWS",
     "Microsoft",
@@ -33,13 +36,22 @@ def extract_vendor(lines, raw_text):
        which typically contain the organization's letterhead/name.
     """
     # 1. Match known vendors first
+    text_lower = raw_text.lower()
+    if "cashfree" in text_lower:
+        return "Cashfree"
+    if "sirphire" in text_lower:
+        return "Sirphire"
+        
     for vendor in KNOWN_VENDORS:
-        if vendor.lower() in raw_text.lower():
+        if vendor.lower() in text_lower:
             return vendor
 
     # 2. Extract from first non-empty lines
-    # Filter out lines that look like date, invoice/receipt number or labels
-    for line in lines[:3]:
+    # Filter out lines that look like status bars or are mostly numbers
+    for line in lines[:5]:  # Check first 5 lines to find a valid vendor name
+        # Skip lines that are status indicators (e.g. signal strength, percentages, time)
+        if "%" in line or "KB/s" in line or "AM" in line or "PM" in line:
+            continue
         # Exclude lines that are mostly numbers (like date or receipt numbers)
         if len(re.sub(r'[^a-zA-Z]', '', line)) > 6:
             # Clean up trailing punctuation
@@ -56,7 +68,8 @@ def extract_date(raw_text):
     # Pattern 1: DD/MM/YYYY or MM/DD/YYYY (e.g. 5/10/2026, 05/10/2026, 6-18-2026)
     date_pattern_numeric = r'\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b'
     # Pattern 2: DD Month YYYY or Month DD YYYY (e.g., 10 May 2026, 26 Apr 2026, May 10, 2026)
-    date_pattern_textual = r'\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b'
+    # Modified to allow years that are glued to times (e.g., 20262013 or 2026,20:13)
+    date_pattern_textual = r'\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*,?\s*(\d{4})'
     
     # Try textual dates first (less ambiguous)
     match_textual = re.search(date_pattern_textual, raw_text, re.IGNORECASE)
