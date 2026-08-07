@@ -24,3 +24,8 @@ build/
 .idea/
 .DS_Store
 Thumbs.db
+
+# User Invoice Uploads for testing (Privacy Protection)
+invoices/
+data/real_invoices/
+
