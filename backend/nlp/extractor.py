@@ -7,6 +7,7 @@ CATEGORY_KEYWORDS = {
     "Utilities": ["electricity", "eb", "power", "water", "gas", "internet", "broadband", "wifi", "network", "telecom"],
     "Software": ["aws", "cloud", "hosting", "domain", "software", "subscription", "github", "cursor", "digitalocean"],
     "Marketing": ["marketing", "ads", "advertising", "google ads", "facebook ads", "promo"],
+    "Shopping": ["shopping", "store", "retail", "order", "purchase", "item", "delivery", "flipkart", "amazon", "myntra", "shipping", "sirphire", "case", "backcase", "cover"],
     "Financial": ["payment", "transfer", "bank", "cashfree", "upi", "gpay", "ref. number", "transaction id", "transaction date"],
 }
 
@@ -147,12 +148,15 @@ def extract_amount(lines, raw_text):
 def classify_category(raw_text):
     """
     Classifies the invoice into a category based on keyword matches.
+    Matches are done with word boundaries to avoid partial substring matching
+    (e.g. avoiding 'fee' matching 'feedback' or 'eb' matching 'website').
     """
     text_lower = raw_text.lower()
     
     for category, keywords in CATEGORY_KEYWORDS.items():
         for keyword in keywords:
-            if keyword.lower() in text_lower:
+            pattern = rf"\b{re.escape(keyword.lower())}\b"
+            if re.search(pattern, text_lower):
                 return category
                 
     return "Miscellaneous"
