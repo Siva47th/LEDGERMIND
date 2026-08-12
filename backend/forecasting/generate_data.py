@@ -25,11 +25,12 @@ def generate_historical_cashflow(days=365):
         try:
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
-            cursor.execute("SELECT date, amount FROM invoices")
+            cursor.execute("SELECT date, amount, vendor FROM invoices")
             rows = cursor.fetchall()
-            for date_str, amount in rows:
-                # Group multiple invoices on the same day
-                actual_invoices[date_str] = actual_invoices.get(date_str, 0.0) + amount
+            for date_str, amount, vendor in rows:
+                if date_str not in actual_invoices:
+                    actual_invoices[date_str] = []
+                actual_invoices[date_str].append({"amount": amount, "vendor": vendor})
             conn.close()
             print(f"[Data Gen] Loaded {len(rows)} actual invoices from database.")
         except Exception as e:
@@ -37,7 +38,7 @@ def generate_historical_cashflow(days=365):
     else:
         print(f"[Data Gen] Warning: Database not found at {DB_PATH}. Generating baseline synthetic data only.")
 
-    # 2. Build time timeline
+    # 2. Build timeline
     end_date = datetime.now().date()
     start_date = end_date - timedelta(days=days-1)
     
@@ -53,47 +54,65 @@ def generate_historical_cashflow(days=365):
     while current_date <= end_date:
         date_str = current_date.strftime("%Y-%m-%d")
         
-        # Initialize day's change
-        daily_change = 0.0
+        # Initialize daily variables
+        daily_revenue = 0.0
+        daily_expense = 0.0
+        recurring_expense = 0.0
+        invoice_expense = 0.0
+        description_parts = []
         
         # A. Baseline Daily Revenue (sales, service income)
         # Small business baseline: average 8000 daily sales
-        daily_revenue = random.normalvariate(8000.0, 2000.0)
-        daily_revenue = max(0.0, daily_revenue) # No negative sales
-        daily_change += daily_revenue
+        sales_rev = random.normalvariate(8000.0, 2000.0)
+        sales_rev = max(0.0, sales_rev) # No negative sales
+        daily_revenue += sales_rev
         
-        # B. Baseline Daily Expenses (inventory, shipping, packaging)
-        daily_expense = random.normalvariate(5000.0, 1000.0)
-        daily_expense = max(0.0, daily_expense)
-        daily_change -= daily_expense
-        
-        # C. Weekly Business Cycle (higher weekend sales, weekend payouts)
+        # B. Weekly Business Cycle (higher weekend sales)
         weekday = current_date.weekday()
         if weekday in [4, 5]: # Friday, Saturday
-            daily_change += random.uniform(3000.0, 8000.0) # weekend spike
+            daily_revenue += random.uniform(3000.0, 8000.0) # weekend spike
             
+        # C. Baseline Daily Expenses (inventory, shipping, packaging)
+        ops_exp = random.normalvariate(5000.0, 1000.0)
+        ops_exp = max(0.0, ops_exp)
+        daily_expense += ops_exp
+        
         # D. Monthly Recurring Corporate Expenses
         day_of_month = current_date.day
         if day_of_month == 1:
-            daily_change -= 30000.0  # Office Rent
+            recurring_expense += 30000.0  # Office Rent
+            description_parts.append("Monthly Office Rent")
         elif day_of_month == 10:
-            daily_change -= 8000.0   # Utility bills
+            recurring_expense += 8000.0   # Utility bills
+            description_parts.append("Monthly Utilities")
         elif day_of_month == 28:
-            daily_change -= 75000.0  # Payroll salaries
+            recurring_expense += 75000.0  # Payroll salaries
+            description_parts.append("Monthly Payroll Salaries")
             
         # E. Overlay Live Actual Invoices uploaded by User
         if date_str in actual_invoices:
-            # Subtract the actual invoice amount since invoices represent expenses/outflow
-            invoice_expense = actual_invoices[date_str]
-            daily_change -= invoice_expense
+            vendors = []
+            for inv in actual_invoices[date_str]:
+                invoice_expense += inv["amount"]
+                vendors.append(inv["vendor"])
+            description_parts.append(f"Uploaded Invoices: {', '.join(vendors)}")
             print(f"[Data Gen] Overlaying actual invoice expense: -Rs. {invoice_expense:.2f} on {date_str}")
             
-        # Update balance
-        current_balance += daily_change
+        # Compile description
+        description = "; ".join(description_parts) if description_parts else "Daily retail operations"
+        
+        # Net balance calculation
+        net_change = daily_revenue - daily_expense - recurring_expense - invoice_expense
+        current_balance += net_change
         
         records.append({
             "date": date_str,
-            "balance": round(current_balance, 2)
+            "balance": round(current_balance, 2),
+            "revenue": round(daily_revenue, 2),
+            "expense": round(daily_expense, 2),
+            "recurring": round(recurring_expense, 2),
+            "actual_invoice": round(invoice_expense, 2),
+            "description": description
         })
         
         current_date += timedelta(days=1)
@@ -101,7 +120,7 @@ def generate_historical_cashflow(days=365):
     # Write to CSV
     df = pd.DataFrame(records)
     df.to_csv(CSV_PATH, index=False)
-    print(f"[Data Gen] Cashflow simulation complete! Saved {len(df)} records to: {CSV_PATH}")
+    print(f"[Data Gen] Cashflow simulation complete! Saved {len(df)} records with audit columns to: {CSV_PATH}")
 
 if __name__ == "__main__":
     generate_historical_cashflow()

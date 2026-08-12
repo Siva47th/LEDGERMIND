@@ -33,6 +33,56 @@ const CATEGORY_COLORS = {
 
 const DEFAULT_COLOR = '#94a3b8';
 
+const CustomTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const isForecast = data.actual === null;
+    
+    return (
+      <div className="glass-card custom-tooltip" style={{ padding: '0.75rem 1rem', border: '1px solid rgba(255,255,255,0.08)', background: '#090d16', color: '#fff', fontSize: '0.8rem', minWidth: '180px', textAlign: 'left', borderRadius: '12px' }}>
+        <div style={{ fontWeight: 600, color: '#94a3b8', marginBottom: '0.4rem' }}>{data.date}</div>
+        
+        {!isForecast ? (
+          <>
+            <div style={{ color: '#3b82f6', fontWeight: 700, margin: '0.25rem 0' }}>
+              Balance: Rs.{data.actual.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', margin: '0.4rem 0' }}></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', color: '#34d399', fontSize: '0.75rem', marginBottom: '0.15rem' }}>
+              <span>Received:</span>
+              <span>+Rs.{data.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', color: '#f87171', fontSize: '0.75rem', marginBottom: '0.3rem' }}>
+              <span>Spent:</span>
+              <span>-Rs.{(data.expense + data.recurring + data.actual_invoice).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            </div>
+            <div style={{ color: '#818cf8', fontSize: '0.7rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.3rem', fontStyle: 'italic' }}>
+              {data.description}
+            </div>
+          </>
+        ) : (
+          <>
+            {data.prophet && (
+              <div style={{ color: '#818cf8', fontWeight: 600, fontSize: '0.75rem' }}>
+                Prophet: Rs.{data.prophet.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </div>
+            )}
+            {data.arima && (
+              <div style={{ color: '#c084fc', fontWeight: 600, marginTop: '0.15rem', fontSize: '0.75rem' }}>
+                ARIMA: Rs.{data.arima.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </div>
+            )}
+            <div style={{ color: '#64748b', fontSize: '0.7rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.3rem', marginTop: '0.3rem' }}>
+              Future Projection
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'invoices' | 'upload' | 'forecast'
   const [forecastData, setForecastData] = useState(null);
@@ -122,7 +172,7 @@ function App() {
     // Add historical actuals
     forecastData.historical.forEach(h => {
       combined.push({
-        date: h.date,
+        ...h,
         actual: h.balance,
         prophet: null,
         arima: null
@@ -150,7 +200,7 @@ function App() {
     // Stitch connection node
     if (lastHistory) {
       combined.push({
-        date: lastHistory.date,
+        ...lastHistory,
         actual: lastHistory.balance,
         prophet: lastHistory.balance,
         arima: lastHistory.balance
@@ -885,13 +935,7 @@ function App() {
                               axisLine={false}
                               tickFormatter={(value) => `Rs.${(value/1000).toFixed(0)}k`}
                             />
-                            <Tooltip 
-                              formatter={(value, name) => [
-                                `Rs.${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                                name === 'actual' ? 'Historical Actual' : name === 'prophet' ? 'Prophet Forecast' : 'ARIMA Baseline'
-                              ]}
-                              contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', color: '#fff' }}
-                            />
+                            <Tooltip content={<CustomTooltip />} />
                             <Legend />
                             <Line 
                               type="monotone" 
@@ -921,6 +965,62 @@ function App() {
                             />
                           </LineChart>
                         </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Audit Ledger Table */}
+                    <div className="glass-card" style={{ padding: '1.75rem', marginTop: '0.5rem' }}>
+                      <div className="grid-section-header" style={{ marginBottom: '1.25rem' }}>
+                        <div>
+                          <h3 style={{ margin: 0, textAlign: 'left' }}>Daily Transaction Evidence Journal</h3>
+                          <p style={{ color: '#64748b', fontSize: '0.8rem', margin: '0.25rem 0 0 0', textAlign: 'left' }}>
+                            Audit trail showing simulated retail revenues alongside your actual uploaded invoice expenses.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="ledger-table-container">
+                        <table className="ledger-table">
+                          <thead>
+                            <tr>
+                              <th style={{ textAlign: 'left' }}>Date</th>
+                              <th style={{ textAlign: 'left' }}>Daily Events / Vendors</th>
+                              <th style={{ textAlign: 'right' }}>Cash Inflow</th>
+                              <th style={{ textAlign: 'right' }}>Cash Outflow</th>
+                              <th style={{ textAlign: 'right' }}>Closing Balance</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...forecastData.historical]
+                              .reverse()
+                              .slice(0, 15)
+                              .map((h, index) => {
+                                const outflow = h.expense + h.recurring + h.actual_invoice;
+                                return (
+                                  <tr key={index}>
+                                    <td style={{ fontWeight: 600, textAlign: 'left' }}>{h.date}</td>
+                                    <td style={{ textAlign: 'left' }}>
+                                      <span style={{ 
+                                        color: h.actual_invoice > 0 ? '#818cf8' : h.recurring > 0 ? '#f472b6' : 'white',
+                                        fontWeight: h.actual_invoice > 0 ? 600 : 'normal'
+                                      }}>
+                                        {h.description}
+                                      </span>
+                                    </td>
+                                    <td style={{ color: '#34d399', fontWeight: 600, textAlign: 'right' }}>
+                                      +Rs.{h.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </td>
+                                    <td style={{ color: outflow > 0 ? '#f87171' : '#64748b', textAlign: 'right' }}>
+                                      {outflow > 0 ? `-Rs.${outflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'Rs.0.00'}
+                                    </td>
+                                    <td style={{ fontWeight: 700, textAlign: 'right' }}>
+                                      Rs.{h.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   </>

@@ -114,7 +114,12 @@ def get_forecasts():
     for _, row in history_df.iterrows():
         history_rows.append({
             "date": row["date"].strftime("%Y-%m-%d"),
-            "balance": float(row["balance"])
+            "balance": float(row["balance"]),
+            "revenue": float(row.get("revenue", 0.0)),
+            "expense": float(row.get("expense", 0.0)),
+            "recurring": float(row.get("recurring", 0.0)),
+            "actual_invoice": float(row.get("actual_invoice", 0.0)),
+            "description": str(row.get("description", ""))
         })
         
     return {
