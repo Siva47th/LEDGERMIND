@@ -12,6 +12,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from ocr.pipeline import extract_text_from_file
 from nlp.extractor import extract_fields
 from forecasting.engine import get_forecasts
+from forecasting.generate_data import generate_historical_cashflow
+from nlp.store_invoices import parse_and_store_invoices
 
 # Load environment variables
 load_dotenv()
@@ -75,13 +77,20 @@ def get_dashboard_stats():
         cursor = conn.cursor()
         
         # 1. Get running statistics (most recent chronological invoice determines balance/risk)
-        cursor.execute("""
-            SELECT cash_balance_at_time, outcome_label 
-            FROM invoices 
-            ORDER BY date DESC, id DESC 
-            LIMIT 1
-        """)
-        latest = cursor.fetchone()
+        current_balance = STARTING_BALANCE
+        risk_status = "healthy"
+        
+        csv_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "synthetic")
+        csv_path = os.path.join(csv_dir, "historical_cashflow.csv")
+        if os.path.exists(csv_path):
+            try:
+                import pandas as pd
+                df = pd.read_csv(csv_path)
+                if not df.empty:
+                    current_balance = float(df.iloc[-1]["balance"])
+                    risk_status = "healthy" if current_balance >= BALANCE_ALERT_THRESHOLD else "strained"
+            except Exception as e:
+                print(f"Failed to read historical cashflow CSV for stats: {e}")
         
         # 2. Get total invoices count and total amount spent
         cursor.execute("SELECT COUNT(*), SUM(amount) FROM invoices")
@@ -89,9 +98,6 @@ def get_dashboard_stats():
         
         total_invoices = count_row[0] if count_row else 0
         total_spent = count_row[1] if count_row and count_row[1] is not None else 0.0
-        
-        current_balance = latest["cash_balance_at_time"] if latest else STARTING_BALANCE
-        risk_status = latest["outcome_label"] if latest else "healthy"
         
         # 3. Get category spend breakdown
         cursor.execute("SELECT category, SUM(amount) as total FROM invoices GROUP BY category")
@@ -198,30 +204,32 @@ def upload_invoice():
         date_str = parsed_fields["date"]
         category = parsed_fields["category"]
         
-        # 3. Calculate running ledger balance
+        # 3. Save to database (temporary balance values, to be updated by database sync)
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Get the balance from the most chronologically recent invoice in the database
-        cursor.execute("SELECT cash_balance_at_time FROM invoices ORDER BY date DESC, id DESC LIMIT 1")
-        latest_row = cursor.fetchone()
-        
-        latest_balance = latest_row["cash_balance_at_time"] if latest_row else STARTING_BALANCE
-        new_balance = latest_balance - amount
-        
-        # Set outcome label
-        outcome = "healthy" if new_balance >= BALANCE_ALERT_THRESHOLD else "strained"
-        
-        # 4. Save to database
         cursor.execute("""
             INSERT INTO invoices (vendor, amount, category, date, cash_balance_at_time, outcome_label)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (vendor, amount, category, date_str, new_balance, outcome))
-        
+            VALUES (?, ?, ?, ?, 0.0, 'healthy')
+        """, (vendor, amount, category, date_str))
         conn.commit()
-        
-        # Fetch the newly created invoice row ID
         new_id = cursor.lastrowid
+        conn.close()
+        
+        # 4. Trigger forecasting dataset regeneration (to incorporate the new invoice expense)
+        print("[API Upload] Rebuilding daily cashflow simulation...")
+        generate_historical_cashflow()
+        
+        # 5. Trigger database running ledger synchronization from the updated CSV
+        print("[API Upload] Synchronizing database ledger running balances...")
+        parse_and_store_invoices()
+        
+        # 6. Retrieve the updated invoice running balance details from the database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT cash_balance_at_time, outcome_label FROM invoices WHERE id = ?", (new_id,))
+        updated_row = cursor.fetchone()
+        new_balance = updated_row["cash_balance_at_time"] if updated_row else 0.0
+        outcome = updated_row["outcome_label"] if updated_row else "healthy"
         conn.close()
         
         # Clean up temporary uploaded file

@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import sys
+import pandas as pd
 from datetime import datetime
 
 # Add workspace directory to python path for imports
@@ -62,6 +63,18 @@ def parse_and_store_invoices():
     cursor.execute("DELETE FROM invoices")
     print("Cleared existing rows in 'invoices' table to prevent duplication.")
     
+    # Load daily cashflow balances if CSV exists
+    csv_balances = {}
+    csv_path = os.path.join(base_dir, "data", "synthetic", "historical_cashflow.csv")
+    if os.path.exists(csv_path):
+        try:
+            df = pd.read_csv(csv_path)
+            for _, row in df.iterrows():
+                # Store balance for each date
+                csv_balances[str(row["date"])] = float(row["balance"])
+        except Exception as e:
+            print(f"Failed to read historical cashflow CSV: {e}")
+            
     running_balance = STARTING_BALANCE
     inserted_count = 0
     
@@ -76,21 +89,23 @@ def parse_and_store_invoices():
         amount = record["amount"]
         category = record["category"]
         
-        # Calculate new cash balance at this time
-        # Balance = previous balance - expense amount
-        running_balance -= amount
+        # Get balance from CSV if available, otherwise fallback to old running balance calculation
+        if date_str in csv_balances:
+            invoice_balance = csv_balances[date_str]
+        else:
+            running_balance -= amount
+            invoice_balance = running_balance
         
         # Decide the business outcome health label
-        outcome = "healthy"
-        if running_balance < BALANCE_ALERT_THRESHOLD:
-            outcome = "strained"
+        outcome = "healthy" if invoice_balance >= BALANCE_ALERT_THRESHOLD else "strained"
             
         # Insert into invoices table
         # Schema: id, vendor, amount, category, date, cash_balance_at_time, outcome_label, created_at
         cursor.execute("""
             INSERT INTO invoices (vendor, amount, category, date, cash_balance_at_time, outcome_label)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (vendor, amount, category, date_str, running_balance, outcome))
+        """, (vendor, amount, category, date_str, invoice_balance, outcome))
+        running_balance = invoice_balance
         
         print(f"{date_str:<12} | {vendor[:28]:<28} | Rs.{amount:<9.2f} | Rs.{running_balance:<11.2f} | {outcome:<9} | {category}")
         inserted_count += 1
