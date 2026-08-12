@@ -253,6 +253,103 @@ def upload_invoice():
     except Exception as e:
         print(f"[API Upload Error] Ingestion failed: {e}")
         return jsonify({"error": f"Failed to ingest invoice: {str(e)}"}), 500
+@app.route("/api/invoices/manual", methods=["POST"])
+def add_manual_invoice():
+    """
+    Accepts a manual cash expense entry:
+    - Inserts it directly into SQLite
+    - Triggers cashflow timeline regeneration
+    - Triggers database balance sync
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "Missing payload"}), 400
+            
+        vendor = data.get("vendor", "Cash Expense")
+        amount = float(data.get("amount", 0.0))
+        date_str = data.get("date")
+        category = data.get("category", "Miscellaneous")
+        user_notes = data.get("user_notes", "")
+        
+        if not date_str:
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            
+        if amount <= 0:
+            return jsonify({"error": "Amount must be positive"}), 400
+            
+        # 1. Save to database (temporary balance values, to be updated by database sync)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO invoices (vendor, amount, category, date, cash_balance_at_time, outcome_label, user_notes)
+            VALUES (?, ?, ?, ?, 0.0, 'healthy', ?)
+        """, (vendor, amount, category, date_str, user_notes))
+        conn.commit()
+        new_id = cursor.lastrowid
+        conn.close()
+        
+        # 2. Re-trigger forecasting CSV regeneration
+        print("[API Manual] Rebuilding daily cashflow simulation...")
+        generate_historical_cashflow()
+        
+        # 3. Synchronize database running balance timeline
+        print("[API Manual] Synchronizing database cash balances...")
+        parse_and_store_invoices()
+        
+        # 4. Fetch the newly synced ledger details
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT cash_balance_at_time, outcome_label, user_notes FROM invoices WHERE id = ?", (new_id,))
+        updated_row = cursor.fetchone()
+        new_balance = updated_row["cash_balance_at_time"] if updated_row else 0.0
+        outcome = updated_row["outcome_label"] if updated_row else "healthy"
+        saved_notes = updated_row["user_notes"] if updated_row else ""
+        conn.close()
+        
+        return jsonify({
+            "id": new_id,
+            "vendor": vendor,
+            "amount": amount,
+            "category": category,
+            "date": date_str,
+            "cash_balance_at_time": new_balance,
+            "outcome_label": outcome,
+            "user_notes": saved_notes
+        }), 201
+        
+    except Exception as e:
+        print(f"[API Manual Error] Add manual transaction failed: {e}")
+        return jsonify({"error": f"Failed to record manual cash transaction: {str(e)}"}), 500
+
+@app.route("/api/invoices/<int:invoice_id>/notes", methods=["PUT"])
+def update_invoice_notes(invoice_id):
+    """
+    Updates the user_notes / spend experience of any invoice in the ledger
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "Missing payload"}), 400
+            
+        user_notes = data.get("user_notes", "")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE invoices SET user_notes = ? WHERE id = ?", (user_notes, invoice_id))
+        conn.commit()
+        conn.close()
+        
+        # Re-run simulation and ledger sync so the notes bubble up to the CSV forecast descriptions!
+        print(f"[API Notes] Updating notes for ID {invoice_id}. Rebuilding daily cashflow...")
+        generate_historical_cashflow()
+        parse_and_store_invoices()
+        
+        return jsonify({"success": True, "message": "Spend experience notes updated successfully"}), 200
+    except Exception as e:
+        print(f"[API Notes Error] Failed to update notes: {e}")
+        return jsonify({"error": f"Failed to save spend experience notes: {str(e)}"}), 500
+
 
 @app.route("/api/forecast", methods=["GET"])
 def get_cashflow_forecast():

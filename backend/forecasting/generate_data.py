@@ -25,12 +25,12 @@ def generate_historical_cashflow(days=365):
         try:
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
-            cursor.execute("SELECT date, amount, vendor FROM invoices")
+            cursor.execute("SELECT date, amount, vendor, user_notes FROM invoices")
             rows = cursor.fetchall()
-            for date_str, amount, vendor in rows:
+            for date_str, amount, vendor, user_notes in rows:
                 if date_str not in actual_invoices:
                     actual_invoices[date_str] = []
-                actual_invoices[date_str].append({"amount": amount, "vendor": vendor})
+                actual_invoices[date_str].append({"amount": amount, "vendor": vendor, "user_notes": user_notes if user_notes else ""})
             conn.close()
             print(f"[Data Gen] Loaded {len(rows)} actual invoices from database.")
         except Exception as e:
@@ -94,7 +94,8 @@ def generate_historical_cashflow(days=365):
             vendors = []
             for inv in actual_invoices[date_str]:
                 invoice_expense += inv["amount"]
-                vendors.append(inv["vendor"])
+                note_suffix = f" ({inv['user_notes']})" if inv.get("user_notes") else ""
+                vendors.append(f"{inv['vendor']}{note_suffix}")
             description_parts.append(f"Uploaded Invoices: {', '.join(vendors)}")
             print(f"[Data Gen] Overlaying actual invoice expense: -Rs. {invoice_expense:.2f} on {date_str}")
             

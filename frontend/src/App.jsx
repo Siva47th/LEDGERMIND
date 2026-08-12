@@ -116,9 +116,12 @@ function App() {
     vendor: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
-    category: 'Miscellaneous'
+    category: 'Miscellaneous',
+    user_notes: ''
   });
   const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [successNotes, setSuccessNotes] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
 
   const fetchData = async (search = '', cat = 'All') => {
     setLoading(true);
@@ -225,6 +228,41 @@ function App() {
     });
     
     return combined;
+  };
+
+  const downloadAuditCSV = () => {
+    if (!forecastData) return;
+    const headers = "Date,Description,Inflow (Rs.),Outflow (Rs.),Closing Balance (Rs.)\n";
+    const rows = forecastData.historical.map(h => {
+      const outflow = h.expense + h.recurring + h.actual_invoice;
+      return `"${h.date}","${h.description}",${h.revenue},${outflow},${h.balance}`;
+    }).join("\n");
+    
+    const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `FinSense_Cash_Flow_Audit_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const downloadInvoicesCSV = () => {
+    if (!invoices.length) return;
+    const headers = "Date,Vendor,Category,Amount (Rs.),Running Balance (Rs.),Outcome\n";
+    const rows = invoices.map(inv => {
+      return `"${inv.date}","${inv.vendor}","${inv.category}",${inv.amount},${inv.cash_balance_at_time},"${inv.outcome_label}"`;
+    }).join("\n");
+    
+    const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `FinSense_Invoices_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Fetch initial data and trigger on search/category change
@@ -344,7 +382,8 @@ function App() {
           vendor: manualForm.vendor,
           amount: parseFloat(manualForm.amount),
           date: manualForm.date,
-          category: manualForm.category
+          category: manualForm.category,
+          user_notes: manualForm.user_notes
         })
       });
       
@@ -365,7 +404,7 @@ function App() {
         progress: 100,
         data: {
           ...data,
-          raw_text_preview: `[MANUAL ENTRY LOG]\nSuccessfully recorded cash payout.\nVendor: ${data.vendor}\nAmount: Rs.${data.amount.toFixed(2)}\nDate: ${data.date}\nCategory: ${data.category}\nLedger balance updated.`
+          raw_text_preview: `[MANUAL ENTRY LOG]\nSuccessfully recorded cash payout.\nVendor: ${data.vendor}\nAmount: Rs.${data.amount.toFixed(2)}\nDate: ${data.date}\nCategory: ${data.category}\nReasoning: ${data.user_notes || 'None'}\nLedger balance updated.`
         },
         error: null
       });
@@ -375,7 +414,8 @@ function App() {
         vendor: '',
         amount: '',
         date: new Date().toISOString().split('T')[0],
-        category: 'Miscellaneous'
+        category: 'Miscellaneous',
+        user_notes: ''
       });
       
     } catch (err) {
@@ -389,6 +429,36 @@ function App() {
       });
     } finally {
       setManualSubmitting(false);
+    }
+  };
+
+  const handleSaveSuccessNotes = async () => {
+    if (!uploadState.data?.id) return;
+    setSavingNotes(true);
+    try {
+      const res = await fetch(`${API_BASE}/invoices/${uploadState.data.id}/notes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_notes: successNotes })
+      });
+      if (!res.ok) throw new Error('Failed to update invoice notes');
+      
+      setUploadState(prev => ({
+        ...prev,
+        data: {
+          ...prev.data,
+          user_notes: successNotes,
+          raw_text_preview: prev.data.raw_text_preview + `\n[Notes Added]: ${successNotes}`
+        }
+      }));
+      
+      await fetchData(searchQuery, selectedCategory);
+      alert('Spend experience notes saved successfully!');
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Failed to save notes');
+    } finally {
+      setSavingNotes(false);
     }
   };
 
@@ -689,8 +759,17 @@ function App() {
                       </button>
                     ))}
                   </div>
-                  <div style={{ color: '#64748b', fontSize: '0.85rem' }}>
-                    Showing <strong>{invoices.length}</strong> entries
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ color: '#64748b', fontSize: '0.85rem' }}>
+                      Showing <strong>{invoices.length}</strong> entries
+                    </div>
+                    <button
+                      className="btn-primary"
+                      onClick={downloadInvoicesCSV}
+                      style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', background: 'rgba(255,255,255,0.04)', color: 'white', border: '1px solid rgba(255,255,255,0.08)' }}
+                    >
+                      Export Ledger (.CSV)
+                    </button>
                   </div>
                 </div>
 
@@ -703,6 +782,7 @@ function App() {
                           <th>Date</th>
                           <th>Vendor</th>
                           <th>Category</th>
+                          <th style={{ textAlign: 'left' }}>Reasoning (Spend Experience)</th>
                           <th style={{ textAlign: 'right' }}>Amount</th>
                           <th style={{ textAlign: 'right' }}>Running Balance</th>
                           <th style={{ textAlign: 'center' }}>Outcome</th>
@@ -717,6 +797,9 @@ function App() {
                               <span className={`badge ${inv.category === 'Shopping' ? 'category-shopping' : 'category'}`}>
                                 {inv.category}
                               </span>
+                            </td>
+                            <td style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.85rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }} title={inv.user_notes}>
+                              {inv.user_notes || '—'}
                             </td>
                             <td style={{ textAlign: 'right', fontWeight: 600 }}>
                               Rs.{inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -858,6 +941,15 @@ function App() {
                               <option value="Financial">Financial</option>
                             </select>
                           </div>
+                          <div className="field-group" style={{ gridColumn: 'span 2' }}>
+                            <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Reasoning / Notes (Spend Experience)</label>
+                            <textarea 
+                              placeholder="Explain why you spent this cash in your own words (e.g. AWS renewal, team refreshments...)"
+                              value={manualForm.user_notes || ''}
+                              onChange={(e) => setManualForm({ ...manualForm, user_notes: e.target.value })}
+                              style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none', minHeight: '80px', resize: 'vertical' }}
+                            />
+                          </div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
                           <button 
@@ -951,18 +1043,41 @@ function App() {
                             }} 
                           />
                         </div>
+                        <div className="field-group" style={{ gridColumn: 'span 2', marginTop: '0.5rem', textAlign: 'left' }}>
+                          <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Reasoning / Notes (Spend Experience)</label>
+                          <textarea 
+                            placeholder="Explain why this invoice was paid in your own words (e.g. software renewal, office utilities...)"
+                            value={successNotes}
+                            onChange={(e) => setSuccessNotes(e.target.value)}
+                            style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none', minHeight: '60px', resize: 'vertical' }}
+                          />
+                        </div>
                       </div>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
                       <button 
                         className="btn-primary" 
-                        onClick={() => setUploadState({ status: 'idle', progress: 0, data: null, error: null })}
+                        onClick={handleSaveSuccessNotes}
+                        disabled={savingNotes}
+                        style={{ background: '#34d399', color: '#090d16', border: 'none', fontWeight: 600 }}
+                      >
+                        {savingNotes ? 'Saving Notes...' : 'Save Notes'}
+                      </button>
+                      <button 
+                        className="btn-primary" 
+                        onClick={() => {
+                          setSuccessNotes('');
+                          setUploadState({ status: 'idle', progress: 0, data: null, error: null });
+                        }}
                         style={{ background: 'rgba(255,255,255,0.04)', color: 'white', border: '1px solid rgba(255,255,255,0.08)' }}
                       >
                         Upload Another
                       </button>
-                      <button className="btn-primary" onClick={() => setActiveTab('dashboard')}>
+                      <button className="btn-primary" onClick={() => {
+                        setSuccessNotes('');
+                        setActiveTab('dashboard');
+                      }}>
                         View on Dashboard
                       </button>
                     </div>
@@ -1152,13 +1267,20 @@ function App() {
 
                     {/* Audit Ledger Table */}
                     <div className="glass-card" style={{ padding: '1.75rem', marginTop: '0.5rem' }}>
-                      <div className="grid-section-header" style={{ marginBottom: '1.25rem' }}>
+                      <div className="grid-section-header" style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <h3 style={{ margin: 0, textAlign: 'left' }}>Daily Transaction Evidence Journal</h3>
                           <p style={{ color: '#64748b', fontSize: '0.8rem', margin: '0.25rem 0 0 0', textAlign: 'left' }}>
                             Audit trail showing simulated retail revenues alongside your actual uploaded invoice expenses.
                           </p>
                         </div>
+                        <button
+                          className="btn-primary"
+                          onClick={downloadAuditCSV}
+                          style={{ padding: '0.45rem 1.15rem', fontSize: '0.78rem', background: 'rgba(255,255,255,0.04)', color: 'white', border: '1px solid rgba(255,255,255,0.08)' }}
+                        >
+                          Export Audit Trail (.CSV)
+                        </button>
                       </div>
 
                       <div className="ledger-table-container">
