@@ -111,6 +111,14 @@ function App() {
     data: null,
     error: null
   });
+  const [uploadMode, setUploadMode] = useState('ocr'); // 'ocr' | 'manual'
+  const [manualForm, setManualForm] = useState({
+    vendor: '',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    category: 'Miscellaneous'
+  });
+  const [manualSubmitting, setManualSubmitting] = useState(false);
 
   const fetchData = async (search = '', cat = 'All') => {
     setLoading(true);
@@ -305,6 +313,82 @@ function App() {
         data: null,
         error: err.message || 'Network error occurred during processing'
       });
+    }
+  };
+
+  const handleManualSubmit = async (e) => {
+    e.preventDefault();
+    if (!manualForm.vendor || !manualForm.amount || !manualForm.date) {
+      alert('Please fill out all fields.');
+      return;
+    }
+    
+    setManualSubmitting(true);
+    setUploadState({ status: 'uploading', progress: 20, data: null, error: null });
+    
+    const interval = setInterval(() => {
+      setUploadState(prev => {
+        if (prev.progress >= 90) {
+          clearInterval(interval);
+          return prev;
+        }
+        return { ...prev, progress: prev.progress + 20 };
+      });
+    }, 150);
+    
+    try {
+      const res = await fetch(`${API_BASE}/invoices/manual`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendor: manualForm.vendor,
+          amount: parseFloat(manualForm.amount),
+          date: manualForm.date,
+          category: manualForm.category
+        })
+      });
+      
+      clearInterval(interval);
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to submit manual cash expense');
+      }
+      
+      const data = await res.json();
+      
+      // Update stats and fetch invoices to sync dashboard
+      await fetchData(searchQuery, selectedCategory);
+      
+      setUploadState({
+        status: 'success',
+        progress: 100,
+        data: {
+          ...data,
+          raw_text_preview: `[MANUAL ENTRY LOG]\nSuccessfully recorded cash payout.\nVendor: ${data.vendor}\nAmount: Rs.${data.amount.toFixed(2)}\nDate: ${data.date}\nCategory: ${data.category}\nLedger balance updated.`
+        },
+        error: null
+      });
+      
+      // Reset form
+      setManualForm({
+        vendor: '',
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        category: 'Miscellaneous'
+      });
+      
+    } catch (err) {
+      console.error(err);
+      clearInterval(interval);
+      setUploadState({
+        status: 'error',
+        progress: 0,
+        data: null,
+        error: err.message || 'Error connecting to manual transaction endpoint'
+      });
+    } finally {
+      setManualSubmitting(false);
     }
   };
 
@@ -664,32 +748,130 @@ function App() {
             {activeTab === 'upload' && (
               <div className="glass-card" style={{ maxWidth: '780px', margin: '0 auto', width: '100%' }}>
                 
-                {/* Inactive Dropzone */}
+                {/* Inactive Ingestion View */}
                 {uploadState.status === 'idle' && (
-                  <div 
-                    className="dropzone-container"
-                    onDragEnter={handleDrag}
-                    onDragOver={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDrop={handleDrop}
-                    style={{ borderStyle: dragActive ? 'solid' : 'dashed', borderColor: dragActive ? '#818cf8' : 'rgba(255,255,255,0.12)' }}
-                  >
-                    <input 
-                      type="file" 
-                      id="file-upload-input" 
-                      style={{ display: 'none' }} 
-                      onChange={handleFileChange}
-                      accept="image/*,application/pdf"
-                    />
-                    <label htmlFor="file-upload-input" style={{ cursor: 'pointer' }}>
-                      <Upload size={36} className="dropzone-icon" />
-                      <div className="dropzone-title">Drag & Drop your invoice here</div>
-                      <div className="dropzone-subtitle">Supports PDF files, PNG, or JPEG screenshots (Max 5MB)</div>
-                      <button className="btn-primary" style={{ marginTop: '1.5rem', pointerEvents: 'none' }}>
-                        Browse File
+                  <>
+                    {/* Mode Toggles */}
+                    <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+                      <button 
+                        className={`btn-primary ${uploadMode === 'ocr' ? 'active' : ''}`}
+                        style={{ 
+                          background: uploadMode === 'ocr' ? '#818cf8' : 'rgba(255,255,255,0.02)',
+                          color: 'white',
+                          border: uploadMode === 'ocr' ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                          boxShadow: uploadMode === 'ocr' ? '0 0 12px rgba(129, 140, 248, 0.3)' : 'none',
+                          padding: '0.5rem 1.25rem'
+                        }}
+                        onClick={() => setUploadMode('ocr')}
+                      >
+                        Scan Receipt (OCR)
                       </button>
-                    </label>
-                  </div>
+                      <button 
+                        className={`btn-primary ${uploadMode === 'manual' ? 'active' : ''}`}
+                        style={{ 
+                          background: uploadMode === 'manual' ? '#818cf8' : 'rgba(255,255,255,0.02)',
+                          color: 'white',
+                          border: uploadMode === 'manual' ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                          boxShadow: uploadMode === 'manual' ? '0 0 12px rgba(129, 140, 248, 0.3)' : 'none',
+                          padding: '0.5rem 1.25rem'
+                        }}
+                        onClick={() => setUploadMode('manual')}
+                      >
+                        Record Hard Cash Expense
+                      </button>
+                    </div>
+
+                    {uploadMode === 'ocr' ? (
+                      <div 
+                        className="dropzone-container"
+                        onDragEnter={handleDrag}
+                        onDragOver={handleDrag}
+                        onDragLeave={handleDrag}
+                        onDrop={handleDrop}
+                        style={{ borderStyle: dragActive ? 'solid' : 'dashed', borderColor: dragActive ? '#818cf8' : 'rgba(255,255,255,0.12)' }}
+                      >
+                        <input 
+                          type="file" 
+                          id="file-upload-input" 
+                          style={{ display: 'none' }} 
+                          onChange={handleFileChange}
+                          accept="image/*,application/pdf"
+                        />
+                        <label htmlFor="file-upload-input" style={{ cursor: 'pointer' }}>
+                          <Upload size={36} className="dropzone-icon" />
+                          <div className="dropzone-title">Drag & Drop your invoice here</div>
+                          <div className="dropzone-subtitle">Supports PDF files, PNG, or JPEG screenshots (Max 5MB)</div>
+                          <button className="btn-primary" style={{ marginTop: '1.5rem', pointerEvents: 'none' }}>
+                            Browse File
+                          </button>
+                        </label>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', textAlign: 'left' }}>
+                        <div className="fields-confirm-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                          <div className="field-group">
+                            <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Vendor / Description</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. Tea & snacks, Office supplies"
+                              value={manualForm.vendor}
+                              onChange={(e) => setManualForm({ ...manualForm, vendor: e.target.value })}
+                              required 
+                              style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none' }}
+                            />
+                          </div>
+                          <div className="field-group">
+                            <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Amount (Rs.)</label>
+                            <input 
+                              type="number" 
+                              step="0.01"
+                              placeholder="0.00"
+                              value={manualForm.amount}
+                              onChange={(e) => setManualForm({ ...manualForm, amount: e.target.value })}
+                              required 
+                              style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none' }}
+                            />
+                          </div>
+                          <div className="field-group">
+                            <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Date</label>
+                            <input 
+                              type="date" 
+                              value={manualForm.date}
+                              onChange={(e) => setManualForm({ ...manualForm, date: e.target.value })}
+                              required 
+                              style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none' }}
+                            />
+                          </div>
+                          <div className="field-group">
+                            <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Category</label>
+                            <select 
+                              value={manualForm.category}
+                              onChange={(e) => setManualForm({ ...manualForm, category: e.target.value })}
+                              style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '42px' }}
+                            >
+                              <option value="Miscellaneous">Miscellaneous</option>
+                              <option value="Utilities">Utilities</option>
+                              <option value="Software">Software</option>
+                              <option value="Marketing">Marketing</option>
+                              <option value="Shopping">Shopping</option>
+                              <option value="Education">Education</option>
+                              <option value="Financial">Financial</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                          <button 
+                            type="submit" 
+                            className="btn-primary" 
+                            disabled={manualSubmitting}
+                            style={{ padding: '0.65rem 1.75rem' }}
+                          >
+                            {manualSubmitting ? 'Recording Expense...' : 'Record Cash Expense'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </>
                 )}
 
                 {/* Progress bar state */}
