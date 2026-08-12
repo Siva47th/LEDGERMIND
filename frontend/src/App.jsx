@@ -842,8 +842,8 @@ function App() {
                           <CheckCircle size={20} />
                         </div>
                         <div className="metric-details">
-                          <span className="metric-detail-label">Prophet Accuracy (MAPE)</span>
-                          <span className="metric-detail-value">{forecastData.metrics.prophet_mape}%</span>
+                          <span className="metric-detail-label">Prophet Model Accuracy</span>
+                          <span className="metric-detail-value">{(100 - forecastData.metrics.prophet_mape).toFixed(2)}%</span>
                         </div>
                       </div>
 
@@ -852,8 +852,8 @@ function App() {
                           <Clock size={20} />
                         </div>
                         <div className="metric-details">
-                          <span className="metric-detail-label">ARIMA Accuracy (MAPE)</span>
-                          <span className="metric-detail-value">{forecastData.metrics.arima_mape}%</span>
+                          <span className="metric-detail-label">ARIMA Model Accuracy</span>
+                          <span className="metric-detail-value">{(100 - forecastData.metrics.arima_mape).toFixed(2)}%</span>
                         </div>
                       </div>
                     </div>
