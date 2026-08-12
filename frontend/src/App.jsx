@@ -8,6 +8,7 @@ import {
   AlertCircle, 
   RefreshCw, 
   TrendingDown, 
+  TrendingUp,
   FileCheck, 
   DollarSign, 
   CheckCircle,
@@ -15,7 +16,7 @@ import {
   ArrowRight,
   ShieldAlert
 } from 'lucide-react';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import './App.css';
 
 const API_BASE = 'http://localhost:5000/api';
@@ -33,7 +34,10 @@ const CATEGORY_COLORS = {
 const DEFAULT_COLOR = '#94a3b8';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'invoices' | 'upload'
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'invoices' | 'upload' | 'forecast'
+  const [forecastData, setForecastData] = useState(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [forecastError, setForecastError] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [stats, setStats] = useState({
     current_balance: 100000.0,
@@ -86,6 +90,83 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchForecast = async () => {
+    setForecastLoading(true);
+    setForecastError(null);
+    try {
+      const res = await fetch(`${API_BASE}/forecast`);
+      if (!res.ok) throw new Error('Failed to run machine learning forecasting engines');
+      const data = await res.json();
+      setForecastData(data);
+    } catch (err) {
+      console.error(err);
+      setForecastError(err.message || 'Connection lost during forecasting calculations');
+    } finally {
+      setForecastLoading(false);
+    }
+  };
+
+  // Fetch forecast data when user opens the forecasting view tab
+  useEffect(() => {
+    if (activeTab === 'forecast') {
+      fetchForecast();
+    }
+  }, [activeTab]);
+
+  const getCombinedChartData = () => {
+    if (!forecastData) return [];
+    const combined = [];
+    
+    // Add historical actuals
+    forecastData.historical.forEach(h => {
+      combined.push({
+        date: h.date,
+        actual: h.balance,
+        prophet: null,
+        arima: null
+      });
+    });
+    
+    // Connect historical and forecast lines at the transition point
+    const lastHistory = forecastData.historical[forecastData.historical.length - 1];
+    
+    const prophetMap = {};
+    forecastData.prophet.forEach(p => {
+      prophetMap[p.date] = p;
+    });
+    
+    const arimaMap = {};
+    forecastData.arima.forEach(a => {
+      arimaMap[a.date] = a;
+    });
+    
+    const forecastDates = Array.from(new Set([
+      ...forecastData.prophet.map(p => p.date),
+      ...forecastData.arima.map(a => a.date)
+    ])).sort();
+    
+    // Stitch connection node
+    if (lastHistory) {
+      combined.push({
+        date: lastHistory.date,
+        actual: lastHistory.balance,
+        prophet: lastHistory.balance,
+        arima: lastHistory.balance
+      });
+    }
+    
+    forecastDates.forEach(date => {
+      combined.push({
+        date: date,
+        actual: null,
+        prophet: prophetMap[date]?.balance || null,
+        arima: arimaMap[date]?.balance || null
+      });
+    });
+    
+    return combined;
   };
 
   // Fetch initial data and trigger on search/category change
@@ -208,6 +289,13 @@ function App() {
             <Upload size={18} />
             <span>Upload Portal</span>
           </button>
+          <button 
+            className={`menu-item ${activeTab === 'forecast' ? 'active' : ''}`}
+            onClick={() => setActiveTab('forecast')}
+          >
+            <TrendingUp size={18} />
+            <span>Cash Forecasting</span>
+          </button>
         </nav>
 
         <div className="sidebar-footer">
@@ -228,11 +316,13 @@ function App() {
               {activeTab === 'dashboard' && 'Financial Overview'}
               {activeTab === 'invoices' && 'Invoices Ledger'}
               {activeTab === 'upload' && 'Document Ingestion Portal'}
+              {activeTab === 'forecast' && 'Cash Flow Forecasting'}
             </h2>
             <p>
               {activeTab === 'dashboard' && 'Real-time cash flow monitoring and spending insights.'}
               {activeTab === 'invoices' && 'View, search, and audit transaction records.'}
               {activeTab === 'upload' && 'Upload invoice receipts to trigger Tesseract OCR & NLP analysis.'}
+              {activeTab === 'forecast' && '30-day future cash flow estimates comparing Prophet and ARIMA projections.'}
             </p>
           </div>
 
@@ -666,6 +756,175 @@ function App() {
                   </div>
                 )}
 
+              </div>
+            )}
+
+            {/* 4. FORECASTING VIEW */}
+            {activeTab === 'forecast' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {forecastLoading && (
+                  <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4rem 2rem', textAlign: 'center' }}>
+                    <RefreshCw size={36} className="loading-spinner" style={{ marginBottom: '1rem', color: '#818cf8' }} />
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Training Forecasting Engine...</h3>
+                    <p style={{ color: '#64748b', fontSize: '0.85rem', maxWidth: '350px', marginTop: '0.25rem' }}>
+                      Fitting Prophet models and ARIMA baselines to 12 months of daily transaction records. This takes a few seconds.
+                    </p>
+                  </div>
+                )}
+
+                {forecastError && (
+                  <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '3rem', textAlign: 'center' }}>
+                    <AlertCircle size={44} color="#ef4444" style={{ marginBottom: '1rem' }} />
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Forecasting Failed</h3>
+                    <p style={{ color: '#64748b', fontSize: '0.85rem', maxWidth: '350px', margin: '0.25rem 0 1.5rem 0' }}>
+                      {forecastError}
+                    </p>
+                    <button className="btn-primary" onClick={fetchForecast}>
+                      Retry Training
+                    </button>
+                  </div>
+                )}
+
+                {forecastData && !forecastLoading && (
+                  <>
+                    {/* Alert Banner if risk detected */}
+                    {forecastData.alert?.has_risk ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '1rem 1.5rem', borderRadius: '16px' }}>
+                        <ShieldAlert size={24} color="#ef4444" />
+                        <div style={{ textAlign: 'left' }}>
+                          <h4 style={{ margin: 0, fontWeight: 700, color: 'white' }}>Liquidity Alert: Projected Cash Deficit</h4>
+                          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#f87171' }}>
+                            Your cash balance is predicted to fall below the safety threshold of Rs.10,000.00 on <strong>{forecastData.alert.first_risk_date}</strong>. 
+                            There are <strong>{forecastData.alert.risk_days_count}</strong> critical risk days projected in the next 30 days.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '1rem 1.5rem', borderRadius: '16px' }}>
+                        <CheckCircle size={24} color="#34d399" />
+                        <div style={{ textAlign: 'left' }}>
+                          <h4 style={{ margin: 0, fontWeight: 700, color: 'white' }}>Cash Flow Forecast Stable</h4>
+                          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#a7f3d0' }}>
+                            Your cash balance is predicted to remain comfortably above the safety threshold (Rs.10,000.00) for the next 30 days.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* KPIs cards row */}
+                    <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+                      <div className="glass-card metric-mini-card">
+                        <div className="metric-icon-box indigo">
+                          <TrendingUp size={20} />
+                        </div>
+                        <div className="metric-details">
+                          <span className="metric-detail-label">Prophet Ending Cash</span>
+                          <span className="metric-detail-value">
+                            Rs.{forecastData.prophet[forecastData.prophet.length - 1].balance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="glass-card metric-mini-card">
+                        <div className="metric-icon-box blue">
+                          <DollarSign size={20} />
+                        </div>
+                        <div className="metric-details">
+                          <span className="metric-detail-label">ARIMA Ending Cash</span>
+                          <span className="metric-detail-value">
+                            Rs.{forecastData.arima[forecastData.arima.length - 1].balance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="glass-card metric-mini-card">
+                        <div className="metric-icon-box green">
+                          <CheckCircle size={20} />
+                        </div>
+                        <div className="metric-details">
+                          <span className="metric-detail-label">Prophet Accuracy (MAPE)</span>
+                          <span className="metric-detail-value">{forecastData.metrics.prophet_mape}%</span>
+                        </div>
+                      </div>
+
+                      <div className="glass-card metric-mini-card">
+                        <div className="metric-icon-box blue">
+                          <Clock size={20} />
+                        </div>
+                        <div className="metric-details">
+                          <span className="metric-detail-label">ARIMA Accuracy (MAPE)</span>
+                          <span className="metric-detail-value">{forecastData.metrics.arima_mape}%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Chart panel */}
+                    <div className="glass-card" style={{ padding: '1.75rem' }}>
+                      <div className="grid-section-header">
+                        <h3>Prophet vs. ARIMA Forecast (30 Days Outlook)</h3>
+                      </div>
+                      
+                      <div style={{ width: '100%', height: '350px', marginTop: '1.5rem' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart 
+                            data={getCombinedChartData()}
+                            margin={{ top: 10, right: 30, left: 20, bottom: 10 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                            <XAxis 
+                              dataKey="date" 
+                              stroke="#64748b" 
+                              fontSize={11}
+                              tickLine={false}
+                              axisLine={false}
+                            />
+                            <YAxis 
+                              stroke="#64748b"
+                              fontSize={11}
+                              tickLine={false}
+                              axisLine={false}
+                              tickFormatter={(value) => `Rs.${(value/1000).toFixed(0)}k`}
+                            />
+                            <Tooltip 
+                              formatter={(value, name) => [
+                                `Rs.${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                                name === 'actual' ? 'Historical Actual' : name === 'prophet' ? 'Prophet Forecast' : 'ARIMA Baseline'
+                              ]}
+                              contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', color: '#fff' }}
+                            />
+                            <Legend />
+                            <Line 
+                              type="monotone" 
+                              dataKey="actual" 
+                              name="Historical Actual" 
+                              stroke="#3b82f6" 
+                              strokeWidth={3}
+                              dot={false}
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="prophet" 
+                              name="Prophet Forecast" 
+                              stroke="#818cf8" 
+                              strokeWidth={2}
+                              strokeDasharray="4 4"
+                              dot={false}
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="arima" 
+                              name="ARIMA Baseline" 
+                              stroke="#c084fc" 
+                              strokeWidth={2}
+                              strokeDasharray="6 6"
+                              dot={false}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </>

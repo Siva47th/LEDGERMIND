@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from ocr.pipeline import extract_text_from_file
 from nlp.extractor import extract_fields
+from forecasting.engine import get_forecasts
 
 # Load environment variables
 load_dotenv()
@@ -244,6 +245,43 @@ def upload_invoice():
     except Exception as e:
         print(f"[API Upload Error] Ingestion failed: {e}")
         return jsonify({"error": f"Failed to ingest invoice: {str(e)}"}), 500
+
+@app.route("/api/forecast", methods=["GET"])
+def get_cashflow_forecast():
+    """
+    Triggers the Prophet + ARIMA forecasting models and returns:
+    - Historical daily balances (last 60 days)
+    - Prophet 30-day future predictions (with lower/upper boundaries)
+    - ARIMA 30-day future predictions
+    - Model MAPE metrics
+    - Risk alert indicators if cash is predicted to cross below Rs. 10,000
+    """
+    try:
+        forecast_data = get_forecasts()
+        
+        # Scan Prophet forecast for risk events
+        risk_events = []
+        alert = False
+        first_risk_date = None
+        
+        for row in forecast_data["prophet"]:
+            # If the predicted mean crosses below threshold
+            if row["balance"] < BALANCE_ALERT_THRESHOLD:
+                alert = True
+                risk_events.append(row["date"])
+                if not first_risk_date:
+                    first_risk_date = row["date"]
+                    
+        forecast_data["alert"] = {
+            "has_risk": alert,
+            "first_risk_date": first_risk_date,
+            "risk_days_count": len(risk_events)
+        }
+        
+        return jsonify(forecast_data), 200
+    except Exception as e:
+        print(f"[API Forecast Error] Model execution failed: {e}")
+        return jsonify({"error": f"Failed to compute cash flow forecast: {str(e)}"}), 500
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
