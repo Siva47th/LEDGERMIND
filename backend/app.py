@@ -1,6 +1,7 @@
 import os
 import sys
 import sqlite3
+from datetime import datetime
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -165,6 +166,8 @@ def get_invoices():
                 "date": row["date"],
                 "cash_balance_at_time": row["cash_balance_at_time"],
                 "outcome_label": row["outcome_label"],
+                "user_notes": row["user_notes"] if row["user_notes"] else "",
+                "user_outcome": row["user_outcome"] if row["user_outcome"] else "",
                 "created_at": row["created_at"]
             })
             
@@ -253,6 +256,8 @@ def upload_invoice():
     except Exception as e:
         print(f"[API Upload Error] Ingestion failed: {e}")
         return jsonify({"error": f"Failed to ingest invoice: {str(e)}"}), 500
+
+
 @app.route("/api/invoices/manual", methods=["POST"])
 def add_manual_invoice():
     """
@@ -349,6 +354,33 @@ def update_invoice_notes(invoice_id):
     except Exception as e:
         print(f"[API Notes Error] Failed to update notes: {e}")
         return jsonify({"error": f"Failed to save spend experience notes: {str(e)}"}), 500
+
+
+@app.route("/api/invoices/<int:invoice_id>/outcome", methods=["PUT"])
+def update_invoice_outcome(invoice_id):
+    """
+    Updates the user_outcome label for an invoice.
+    This is a custom user-set label (e.g., 'Productive', 'Wasteful', 'Necessary')
+    that is separate from the system-computed outcome_label.
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "Missing payload"}), 400
+
+        user_outcome = data.get("user_outcome", "")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE invoices SET user_outcome = ? WHERE id = ?", (user_outcome, invoice_id))
+        conn.commit()
+        conn.close()
+
+        print(f"[API Outcome] Updated user_outcome for invoice #{invoice_id} to '{user_outcome}'")
+        return jsonify({"success": True, "message": f"Outcome label updated to '{user_outcome}'"}), 200
+    except Exception as e:
+        print(f"[API Outcome Error] Failed to update outcome: {e}")
+        return jsonify({"error": f"Failed to update outcome label: {str(e)}"}), 500
 
 
 @app.route("/api/forecast", methods=["GET"])

@@ -20,48 +20,64 @@ def parse_and_store_invoices():
     extracted_text_dir = os.path.join(base_dir, "invoices", "extracted_text")
     
     print("=" * 60)
-    print("FINSENSE - DATABASE SYNC & running BALANCE ENGINE")
+    print("FINSENSE - DATABASE SYNC & RUNNING BALANCE ENGINE")
     print("=" * 60)
-    print(f"Reading text files from: {extracted_text_dir}")
     print(f"Database target:        {DB_PATH}")
     print("=" * 60)
     
-    if not os.path.exists(extracted_text_dir):
-        print(f"Error: Extracted text directory '{extracted_text_dir}' does not exist.")
-        return
-        
-    text_files = [f for f in os.listdir(extracted_text_dir) if f.endswith("_raw.txt")]
-    
-    if not text_files:
-        print("No raw text files found in 'invoices/extracted_text/'. Run test_ocr.py first.")
-        return
-        
-    extracted_records = []
-    
-    for filename in text_files:
-        file_path = os.path.join(extracted_text_dir, filename)
-        with open(file_path, "r", encoding="utf-8") as f:
-            raw_text = f.read()
-            
-        # Parse fields
-        fields = extract_fields(raw_text)
-        fields["source_file"] = filename
-        extracted_records.append(fields)
-        print(f"Parsed '{filename}' -> Date: {fields['date']}, Amt: Rs.{fields['amount']:.2f}, Vendor: {fields['vendor']}")
-        
-    # Sort records chronologically (by date ascending) to accurately compute running cash balance
-    # Date string format is YYYY-MM-DD, which naturally sorts correctly alphabetically
-    extracted_records.sort(key=lambda x: x["date"])
-    
-    print("\nSorting records chronologically...")
-    
     # Establish connection to SQLite
     conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # Clear old records to start fresh for development/testing
-    cursor.execute("DELETE FROM invoices")
-    print("Cleared existing rows in 'invoices' table to prevent duplication.")
+    # 1. Fetch current invoices from the database
+    cursor.execute("SELECT id, vendor, amount, category, date, user_outcome FROM invoices")
+    db_rows = cursor.fetchall()
+    
+    extracted_records = []
+    
+    if len(db_rows) > 0:
+        print(f"Loaded {len(db_rows)} invoice records from database ledger.")
+        for row in db_rows:
+            extracted_records.append({
+                "id": row["id"],
+                "vendor": row["vendor"],
+                "amount": row["amount"],
+                "category": row["category"],
+                "date": row["date"],
+                "user_outcome": row["user_outcome"] if row["user_outcome"] else ""
+            })
+    else:
+        print("Database is empty. Bootstrapping from OCR raw text files...")
+        if os.path.exists(extracted_text_dir):
+            text_files = [f for f in os.listdir(extracted_text_dir) if f.endswith("_raw.txt")]
+            for filename in text_files:
+                file_path = os.path.join(extracted_text_dir, filename)
+                with open(file_path, "r", encoding="utf-8") as f:
+                    raw_text = f.read()
+                fields = extract_fields(raw_text)
+                cursor.execute("""
+                    INSERT INTO invoices (vendor, amount, category, date, cash_balance_at_time, outcome_label)
+                    VALUES (?, ?, ?, ?, 0.0, 'healthy')
+                """, (fields["vendor"], fields["amount"], fields["category"], fields["date"]))
+                conn.commit()
+                new_id = cursor.lastrowid
+                extracted_records.append({
+                    "id": new_id,
+                    "vendor": fields["vendor"],
+                    "amount": fields["amount"],
+                    "category": fields["category"],
+                    "date": fields["date"]
+                })
+                print(f"Parsed & bootstrapped '{filename}' -> Date: {fields['date']}, Amt: Rs.{fields['amount']:.2f}")
+
+    if not extracted_records:
+        print("No invoices to process.")
+        conn.close()
+        return
+        
+    # Sort chronologically (date ascending)
+    extracted_records.sort(key=lambda x: x["date"])
     
     # Load daily cashflow balances if CSV exists
     csv_balances = {}
@@ -70,20 +86,18 @@ def parse_and_store_invoices():
         try:
             df = pd.read_csv(csv_path)
             for _, row in df.iterrows():
-                # Store balance for each date
                 csv_balances[str(row["date"])] = float(row["balance"])
         except Exception as e:
             print(f"Failed to read historical cashflow CSV: {e}")
             
     running_balance = STARTING_BALANCE
-    inserted_count = 0
-    
-    print(f"\nProcessing ledger (Starting Balance: Rs.{STARTING_BALANCE:.2f}):")
+    print(f"\nRecalculating running balances (Starting Balance: Rs.{STARTING_BALANCE:.2f}):")
     print("-" * 90)
     print(f"{'Date':<12} | {'Vendor':<28} | {'Amount':<10} | {'New Balance':<12} | {'Outcome':<9} | {'Category'}")
     print("-" * 90)
     
     for record in extracted_records:
+        row_id = record["id"]
         date_str = record["date"]
         vendor = record["vendor"]
         amount = record["amount"]
@@ -96,25 +110,25 @@ def parse_and_store_invoices():
             running_balance -= amount
             invoice_balance = running_balance
         
-        # Decide the business outcome health label
-        outcome = "healthy" if invoice_balance >= BALANCE_ALERT_THRESHOLD else "strained"
-            
-        # Insert into invoices table
-        # Schema: id, vendor, amount, category, date, cash_balance_at_time, outcome_label, created_at
-        cursor.execute("""
-            INSERT INTO invoices (vendor, amount, category, date, cash_balance_at_time, outcome_label)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (vendor, amount, category, date_str, invoice_balance, outcome))
-        running_balance = invoice_balance
+        # System-computed outcome based on financial health thresholds
+        system_outcome = "healthy" if invoice_balance >= BALANCE_ALERT_THRESHOLD else "strained"
         
-        print(f"{date_str:<12} | {vendor[:28]:<28} | Rs.{amount:<9.2f} | Rs.{running_balance:<11.2f} | {outcome:<9} | {category}")
-        inserted_count += 1
+        # Update running balance and system outcome — user_outcome is NEVER touched here
+        cursor.execute("""
+            UPDATE invoices 
+            SET cash_balance_at_time = ?, outcome_label = ? 
+            WHERE id = ?
+        """, (invoice_balance, system_outcome, row_id))
+        
+        # Display user_outcome if set, otherwise show system outcome
+        display_outcome = record.get("user_outcome") or system_outcome
+        running_balance = invoice_balance
+        print(f"{date_str:<12} | {vendor[:28]:<28} | Rs.{amount:<9.2f} | Rs.{running_balance:<11.2f} | {display_outcome:<14} | {category}")
         
     conn.commit()
     conn.close()
-    
-    print("-" * 90)
-    print(f"Successfully processed and stored {inserted_count} records in 'invoices' table.")
+    print("=" * 60)
+    print("DATABASE SYNCHRONIZATION COMPLETE")
     print("=" * 60)
 
 if __name__ == "__main__":

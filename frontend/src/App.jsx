@@ -14,7 +14,8 @@ import {
   CheckCircle,
   Clock,
   ArrowRight,
-  ShieldAlert
+  ShieldAlert,
+  Tag
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import './App.css';
@@ -250,9 +251,9 @@ function App() {
 
   const downloadInvoicesCSV = () => {
     if (!invoices.length) return;
-    const headers = "Date,Vendor,Category,Amount (Rs.),Running Balance (Rs.),Outcome\n";
+    const headers = "Date,Vendor,Category,Amount (Rs.),Running Balance (Rs.),System Outcome,User Outcome,Notes\n";
     const rows = invoices.map(inv => {
-      return `"${inv.date}","${inv.vendor}","${inv.category}",${inv.amount},${inv.cash_balance_at_time},"${inv.outcome_label}"`;
+      return `"${inv.date}","${inv.vendor}","${inv.category}",${inv.amount},${inv.cash_balance_at_time},"${inv.outcome_label}","${inv.user_outcome || ''}","${inv.user_notes || ''}"`;
     }).join("\n");
     
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
@@ -263,6 +264,24 @@ function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const saveOutcomeLabel = async (invoiceId, newOutcome) => {
+    try {
+      const res = await fetch(`${API_BASE}/invoices/${invoiceId}/outcome`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_outcome: newOutcome })
+      });
+      if (!res.ok) throw new Error('Failed to save outcome label');
+      // Optimistically update the local state
+      setInvoices(prev => prev.map(inv => 
+        inv.id === invoiceId ? { ...inv, user_outcome: newOutcome } : inv
+      ));
+    } catch (err) {
+      console.error('Failed to save outcome:', err);
+      alert('Could not save outcome label. Please try again.');
+    }
   };
 
   // Fetch initial data and trigger on search/category change
@@ -742,7 +761,7 @@ function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
                   <div style={{ display: 'flex', gap: '1rem' }}>
                     {/* Category quick selectors */}
-                    {['All', 'Education', 'Shopping', 'Utilities', 'Software', 'Financial'].map((cat) => (
+                    {['All', 'Education', 'Shopping', 'Utilities', 'Software', 'Financial', 'Miscellaneous'].map((cat) => (
                       <button
                         key={cat}
                         className={`badge ${selectedCategory === cat ? 'category' : ''}`}
@@ -785,7 +804,8 @@ function App() {
                           <th style={{ textAlign: 'left' }}>Reasoning (Spend Experience)</th>
                           <th style={{ textAlign: 'right' }}>Amount</th>
                           <th style={{ textAlign: 'right' }}>Running Balance</th>
-                          <th style={{ textAlign: 'center' }}>Outcome</th>
+                          <th style={{ textAlign: 'center' }}>Health</th>
+                          <th style={{ textAlign: 'center' }}>Outcome Label</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -811,6 +831,44 @@ function App() {
                               <span className={`badge status-${inv.outcome_label}`}>
                                 {inv.outcome_label}
                               </span>
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              <select
+                                id={`outcome-select-${inv.id}`}
+                                value={inv.user_outcome || ''}
+                                onChange={(e) => saveOutcomeLabel(inv.id, e.target.value)}
+                                style={{
+                                  background: inv.user_outcome ? 'rgba(99, 102, 241, 0.12)' : 'rgba(255,255,255,0.04)',
+                                  color: inv.user_outcome ? {
+                                    'Productive': '#34d399',
+                                    'Necessary': '#60a5fa',
+                                    'Wasteful': '#f87171',
+                                    'Pending Review': '#fbbf24',
+                                    'Break-even': '#94a3b8'
+                                  }[inv.user_outcome] || '#c084fc' : '#64748b',
+                                  border: '1px solid rgba(255,255,255,0.08)',
+                                  borderRadius: '8px',
+                                  padding: '0.3rem 0.5rem',
+                                  fontSize: '0.78rem',
+                                  fontWeight: inv.user_outcome ? 600 : 400,
+                                  cursor: 'pointer',
+                                  minWidth: '120px',
+                                  outline: 'none',
+                                  appearance: 'none',
+                                  WebkitAppearance: 'none',
+                                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                                  backgroundRepeat: 'no-repeat',
+                                  backgroundPosition: 'right 0.4rem center',
+                                  paddingRight: '1.5rem'
+                                }}
+                              >
+                                <option value="" style={{ background: '#0f1629', color: '#64748b' }}>— Set Outcome —</option>
+                                <option value="Productive" style={{ background: '#0f1629', color: '#34d399' }}>✅ Productive</option>
+                                <option value="Necessary" style={{ background: '#0f1629', color: '#60a5fa' }}>📋 Necessary</option>
+                                <option value="Wasteful" style={{ background: '#0f1629', color: '#f87171' }}>❌ Wasteful</option>
+                                <option value="Pending Review" style={{ background: '#0f1629', color: '#fbbf24' }}>⏳ Pending Review</option>
+                                <option value="Break-even" style={{ background: '#0f1629', color: '#94a3b8' }}>⚖️ Break-even</option>
+                              </select>
                             </td>
                           </tr>
                         ))}

@@ -49,6 +49,10 @@ def initialize_database():
         cursor.execute("ALTER TABLE invoices ADD COLUMN user_notes TEXT")
         conn.commit()
         print("Added 'user_notes' column to 'invoices' table migration successfully.")
+    if "user_outcome" not in columns:
+        cursor.execute("ALTER TABLE invoices ADD COLUMN user_outcome TEXT DEFAULT ''")
+        conn.commit()
+        print("Added 'user_outcome' column to 'invoices' table migration successfully.")
     
     # Optional: Verify database table exists
     cursor.execute("PRAGMA table_info(invoices)")
