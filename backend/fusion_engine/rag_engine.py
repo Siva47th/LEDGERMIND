@@ -142,12 +142,16 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     # Format retrieved cases for prompt
     cases_text_list = []
     for idx, c in enumerate(retrieved_cases, 1):
-        meta = c.get("metadata", {})
+        vendor = c.get('vendor_or_client', c.get('metadata', {}).get('vendor_or_client', 'Unknown'))
+        amount = c.get('amount', c.get('metadata', {}).get('amount', 0.0))
+        tx_type = c.get('transaction_type', c.get('metadata', {}).get('transaction_type', 'expense'))
+        outcome = c.get('outcome', c.get('metadata', {}).get('outcome', 'unknown'))
+        notes = c.get('notes', c.get('metadata', {}).get('notes', ''))
+        sim_score = c.get('similarity_score', 0)
+
         cases_text_list.append(
-            f"Case #{idx}: Vendor/Client={meta.get('vendor_or_client', 'Unknown')}, "
-            f"Amount=Rs.{meta.get('amount', 0):,.2f}, Type={meta.get('transaction_type', 'expense')}, "
-            f"Outcome={meta.get('outcome', 'unknown')}, Similarity Score={c.get('similarity_score', 0):.2f}. "
-            f"Details: {c.get('document', '')}"
+            f"Case #{idx}: Vendor/Client={vendor}, Amount=Rs.{amount:,.2f}, Type={tx_type}, "
+            f"HISTORICAL OUTCOME STATE={outcome.upper()}, Notes/Lesson={notes}, Similarity Score={sim_score:.1f}%."
         )
     formatted_cases = "\n".join(cases_text_list) if cases_text_list else "No similar past cases found."
 
@@ -181,14 +185,20 @@ PAST CASE MEMORY (Retrieved via Cosine Similarity from ChromaDB):
 
 ADAPTIVE BLENDING WEIGHT: {blend_weight:.2f} (1.00 means high historical grounding; 0.00 means generic rules).
 
+CRITICAL GROUNDING INSTRUCTIONS:
+When PAST CASE MEMORY contains similar past transactions (e.g. past college fee payments, equipment purchases, or marketing expenses):
+1. YOU MUST EXPLICITLY CITE WHAT HAPPENED LAST TIME in your 'explanation' and 'key_factors'. Mention the specific past vendor/case (e.g. IFET College of Engineering, Anna University) and its historical outcome ('strained' or 'healthy').
+2. Explain what lesson was learned from that past expenditure (e.g. 'Last time paying Rs. 50,000 for college fees temporarily strained liquid reserves for 3 weeks...').
+3. Combine that historical lesson with your live balance and 30-day forecast to provide a grounded recommendation.
+
 {lang_instruction}
 
 INSTRUCTIONS:
 Analyze the user proposal and respond in STRICT JSON format with EXACTLY these keys:
 {{
   "verdict": "Recommended" | "Proceed with Caution" | "Not Recommended",
-  "explanation": "Detailed 2-3 sentence explanation explaining the reasoning, referencing the live balance and past cases.",
-  "key_factors": ["Point 1", "Point 2", "Point 3"],
+  "explanation": "Detailed 2-3 sentence explanation explaining the reasoning, explicitly referencing what happened in past similar case memories and live balance.",
+  "key_factors": ["Point 1 ( citing past case outcome)", "Point 2 (live balance check)", "Point 3 (forecast trajectory)"],
   "estimated_post_balance": <numeric float estimate of cash balance if spent>,
   "risk_level": "Low" | "Medium" | "High",
   "suggested_action": "Actionable next step advice for the business owner"
