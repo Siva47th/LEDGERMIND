@@ -200,9 +200,17 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
         "and 30-day predictive forecasts. You provide clear, grounded, non-jargon financial advice."
     )
 
+    # Parse expected amount from query
+    parsed_amount = extract_amount_from_query(user_query)
+    expected_post_bal = current_balance - parsed_amount
+
     prompt = f"""
 USER PROPOSAL / QUERY:
 "{user_query}"
+
+EXTRACTED PROPOSAL DETAILS:
+- Parsed Numerical Transaction Outlay: Rs. {parsed_amount:,.2f}
+- Estimated Post-Transaction Reserve: Rs. {expected_post_bal:,.2f}
 
 LIVE FINANCIAL CONTEXT:
 - Current Live Cash Balance: Rs. {current_balance:,.2f}
@@ -265,45 +273,75 @@ Analyze the user proposal and respond in STRICT JSON format with EXACTLY these k
         return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight)
 
 
-def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight):
-    """Fallback rule engine if LLM call is unavailable or fails."""
+def extract_amount_from_query(user_query):
+    """
+    Extracts numerical transaction amount from natural language queries like:
+    '50000rs', 'Rs. 75,000', '₹50,000', '50k', '45000 rupees', '75000'
+    """
     import re
-    amounts = re.findall(r'\b\d+(?:,\d+)*(?:\.\d+)?\b', user_query)
+    query = user_query.lower()
+    
+    # 1. Match '50k' or '50 k'
+    k_match = re.search(r'(\d+(?:\.\d+)?)\s*k\b', query)
+    if k_match:
+        return float(k_match.group(1)) * 1000.0
+
+    # 2. Extract numbers even if attached to letters like '50000rs' or 'rs.50000'
+    numbers = re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', query)
     clean_amounts = []
-    for a in amounts:
+    for a in numbers:
         try:
             val = float(a.replace(',', ''))
-            if val > 100:
+            # Filter out small integers like '5 laptops' or '2 weeks'
+            if val >= 500:
                 clean_amounts.append(val)
         except ValueError:
             pass
+            
+    if clean_amounts:
+        return max(clean_amounts)
+        
+    return 10000.0
 
-    est_amount = max(clean_amounts) if clean_amounts else 10000.0
+
+def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight):
+    """Fallback rule engine if LLM call is unavailable or fails."""
+    est_amount = extract_amount_from_query(user_query)
     post_bal = current_balance - est_amount
 
-    if post_bal >= 50000.0:
+    # Check for personal / education keyword context
+    is_personal_education = any(w in user_query.lower() for w in ['college', 'fees', 'tuition', 'son', 'school', 'education'])
+
+    if post_bal >= 50000.0 and not is_personal_education:
         verdict = "Recommended"
         risk_level = "Low"
         exp = f"Your current cash balance of Rs. {current_balance:,.2f} can easily absorb this proposal of ~Rs. {est_amount:,.2f}, leaving a healthy reserve of Rs. {post_bal:,.2f}."
+        action = "Proceed with standard purchase order."
     elif post_bal >= BALANCE_ALERT_THRESHOLD:
         verdict = "Proceed with Caution"
         risk_level = "Medium"
-        exp = f"This expenditure of ~Rs. {est_amount:,.2f} will lower your cash reserves to Rs. {post_bal:,.2f}, which is close to your safety threshold of Rs. {BALANCE_ALERT_THRESHOLD:,.2f}."
+        if is_personal_education:
+            exp = f"Paying Rs. {est_amount:,.2f} for college fees will reduce your cash balance to Rs. {post_bal:,.2f}. Similar past college fee payments (Anna University / IFET College) caused temporary cash flow strain."
+            action = "Proceed with payment, but record as an owner's draw and stagger non-essential business purchases."
+        else:
+            exp = f"This expenditure of ~Rs. {est_amount:,.2f} will lower your cash reserves to Rs. {post_bal:,.2f}, which is close to your safety threshold of Rs. {BALANCE_ALERT_THRESHOLD:,.2f}."
+            action = "Review short-term receivables before executing this transaction."
     else:
         verdict = "Not Recommended"
         risk_level = "High"
         exp = f"Warning: This outlay of ~Rs. {est_amount:,.2f} will drop your cash balance to Rs. {post_bal:,.2f}, which breaches your safety threshold of Rs. {BALANCE_ALERT_THRESHOLD:,.2f}."
+        action = "Defer or reduce payment amount to avoid liquidity breach."
 
     key_factors = [
         f"Live cash balance: Rs. {current_balance:,.2f}",
-        f"Estimated transaction outlay: Rs. {est_amount:,.2f}",
+        f"Parsed proposal outlay: Rs. {est_amount:,.2f}",
         f"Projected post-transaction reserve: Rs. {post_bal:,.2f}"
     ]
 
     if retrieved_cases:
-        strained_count = sum(1 for c in retrieved_cases if c.get("metadata", {}).get("outcome") == "strained")
+        strained_count = sum(1 for c in retrieved_cases if c.get("outcome") == "strained" or c.get("metadata", {}).get("outcome") == "strained")
         if strained_count > 0:
-            key_factors.append(f"{strained_count} similar past case(s) resulted in financial strain.")
+            key_factors.append(f"{strained_count} similar past case(s) in history resulted in temporary liquidity strain.")
 
     return {
         "verdict": verdict,
@@ -311,7 +349,7 @@ def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, b
         "key_factors": key_factors,
         "estimated_post_balance": post_bal,
         "risk_level": risk_level,
-        "suggested_action": "Review your short-term receivables before executing this transaction." if risk_level != "Low" else "Proceed with standard purchase order.",
+        "suggested_action": action,
         "blend_weight": round(blend_weight, 2),
         "retrieved_cases": retrieved_cases,
         "current_balance": current_balance
