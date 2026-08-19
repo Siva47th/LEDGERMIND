@@ -102,46 +102,63 @@ def call_gemini_rest_api(api_key, system_instruction, prompt_text):
     return None
 
 
-def normalize_search_query(user_query):
+def normalize_search_query(user_query, api_key=None):
     """
-    Translates or augments non-English / Tamil user queries for ChromaDB vector search compatibility.
+    LLM-Powered Semantic Query Rewriter:
+    Uses Gemini LLM (or smart fallback) to convert ANY natural language query
+    (Tamil, English, Tanglish, informal, shorthand) into a clean, canonical
+    English semantic search query optimized for ChromaDB vector memory retrieval.
     """
+    if not api_key:
+        api_key = os.getenv("GEMINI_API_KEY")
+
+    if api_key:
+        system_prompt = (
+            "You are a semantic query rewriting engine for vector database retrieval. "
+            "Convert the user's input (in English, Tamil, Tanglish, or any phrasing) into a concise 1-sentence "
+            "canonical English search query highlighting the transaction domain, item/service, category, and intent. "
+            "Respond ONLY with the rewritten English search text."
+        )
+        try:
+            rewritten = call_gemini_rest_api(api_key, system_prompt, f"User Input: \"{user_query}\"")
+            if rewritten and len(rewritten.strip()) > 3:
+                clean_rewritten = rewritten.strip().strip('"').strip("'")
+                print(f"[RAG Engine] Semantic LLM Query Rewrite: '{user_query}' -> '{clean_rewritten}'")
+                return f"{clean_rewritten} {user_query}"
+        except Exception as e:
+            print(f"[RAG Engine] LLM query rewrite warning: {e}")
+
+    # Fallback heuristic normalization
     search_text = user_query
-    
-    # Check if query contains Tamil script characters (Unicode block \u0B80 - \u0BFF)
     if any('\u0b80' <= char <= '\u0bff' for char in user_query):
         tamil_map = {
-            "காலேஜ்": "college",
-            "ஃபீஸ்": "fees tuition",
-            "பையனுக்கு": "son child family",
-            "கட்டலாமா": "pay spend fee",
-            "லேப்டாப்": "laptop computer",
-            "வாடகை": "rent lease",
-            "கணினி": "computer",
-            "விளம்பரம்": "advertising marketing",
-            "கட்டணம்": "fee payment"
+            "காலேஜ்": "college", "ஃபீஸ்": "fees tuition", "பையனுக்கு": "son child family",
+            "கட்டலாமா": "pay spend fee", "லேப்டாப்": "laptop computer", "வாடகை": "rent lease",
+            "கணினி": "computer", "விளம்பரம்": "advertising marketing", "கட்டணம்": "fee payment"
         }
         augmented = [eng for word, eng in tamil_map.items() if word in user_query]
         if augmented:
             search_text = f"{user_query} {' '.join(augmented)}"
         else:
             search_text = f"{user_query} college tuition fees expense"
-            
+
     return search_text
 
 
 def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     """
     RAG Fusion Engine Main Entry Point:
-    1. Retrieves top K similar past case memories from ChromaDB
+    1. Retrieves top K similar past case memories from ChromaDB using LLM Semantic Query Rewriting
     2. Fetches live cash balance & 30-day forecast trajectory
     3. Calculates Adaptive Blending confidence weight
     4. Constructs structured prompt for Gemini API (supporting English & Tamil)
     5. Calls Gemini model to generate explainable financial advice
     """
-    # 1. Retrieve Similar Cases from ChromaDB Vector Store with Normalized Search Text
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    # 1. Retrieve Similar Cases from ChromaDB Vector Store with LLM Semantic Query Rewriting
     try:
-        search_query = normalize_search_query(user_query)
+        search_query = normalize_search_query(user_query, api_key=api_key)
         retrieved_cases = query_similar_cases(query_text=search_query, top_k=top_k)
     except Exception as e:
         print(f"[RAG Engine] Vector search warning: {e}")
