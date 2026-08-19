@@ -25,7 +25,9 @@ build/
 .DS_Store
 Thumbs.db
 
-# User Invoice Uploads for testing (Privacy Protection)
+# User Invoice Uploads & Vector Database (Privacy Protection)
 invoices/
 data/real_invoices/
+backend/data/chroma_db/
+backend/temp_uploads/
 

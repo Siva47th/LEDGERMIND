@@ -12,37 +12,51 @@ from backend.nlp.extractor import extract_fields
 DB_NAME = "finsense.db"
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), DB_NAME)
 
-STARTING_BALANCE = 250000.0  # Assumed starting balance of the business (₹2,50,000.00)
+# Read starting balance from environment (single source of truth)
+# Falls back to 250000 if not set — but in production this comes from .env
+STARTING_BALANCE = float(os.environ.get("STARTING_BALANCE", 250000.0))
 BALANCE_ALERT_THRESHOLD = 10000.0  # Alert threshold for business strain (₹10,000.00)
 
-def parse_and_store_invoices():
+def parse_and_store_transactions():
+    """
+    Bootstraps the database from OCR extracted text files if empty,
+    and recomputes system outcome labels for all transactions based on
+    live-calculated running balance.
+
+    Balance is NEVER stored in the database — it's always calculated from:
+        balance = starting_balance + Σ(income) + Σ(return_in) - Σ(expense) - Σ(return_out)
+    """
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     extracted_text_dir = os.path.join(base_dir, "invoices", "extracted_text")
-    
+
     print("=" * 60)
-    print("FINSENSE - DATABASE SYNC & RUNNING BALANCE ENGINE")
+    print("FINSENSE - DATABASE SYNC & OUTCOME LABEL ENGINE")
     print("=" * 60)
     print(f"Database target:        {DB_PATH}")
     print("=" * 60)
-    
+
     # Establish connection to SQLite
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    
-    # 1. Fetch current invoices from the database
-    cursor.execute("SELECT id, vendor, amount, category, date, user_outcome FROM invoices")
+
+    # 1. Fetch current transactions from the database
+    cursor.execute("""
+        SELECT id, vendor_or_client, amount, transaction_type, category, date, user_outcome 
+        FROM transactions
+    """)
     db_rows = cursor.fetchall()
-    
-    extracted_records = []
-    
+
+    records = []
+
     if len(db_rows) > 0:
-        print(f"Loaded {len(db_rows)} invoice records from database ledger.")
+        print(f"Loaded {len(db_rows)} transaction records from database.")
         for row in db_rows:
-            extracted_records.append({
+            records.append({
                 "id": row["id"],
-                "vendor": row["vendor"],
+                "vendor_or_client": row["vendor_or_client"],
                 "amount": row["amount"],
+                "transaction_type": row["transaction_type"],
                 "category": row["category"],
                 "date": row["date"],
                 "user_outcome": row["user_outcome"] if row["user_outcome"] else ""
@@ -57,79 +71,74 @@ def parse_and_store_invoices():
                     raw_text = f.read()
                 fields = extract_fields(raw_text)
                 cursor.execute("""
-                    INSERT INTO invoices (vendor, amount, category, date, cash_balance_at_time, outcome_label)
-                    VALUES (?, ?, ?, ?, 0.0, 'healthy')
-                """, (fields["vendor"], fields["amount"], fields["category"], fields["date"]))
+                    INSERT INTO transactions (vendor_or_client, amount, transaction_type, category, date, outcome_label)
+                    VALUES (?, ?, ?, ?, ?, 'healthy')
+                """, (fields["vendor"], fields["amount"], fields["transaction_type"], fields["category"], fields["date"]))
                 conn.commit()
                 new_id = cursor.lastrowid
-                extracted_records.append({
+                records.append({
                     "id": new_id,
-                    "vendor": fields["vendor"],
+                    "vendor_or_client": fields["vendor"],
                     "amount": fields["amount"],
+                    "transaction_type": fields["transaction_type"],
                     "category": fields["category"],
                     "date": fields["date"]
                 })
-                print(f"Parsed & bootstrapped '{filename}' -> Date: {fields['date']}, Amt: Rs.{fields['amount']:.2f}")
+                print(f"Parsed & bootstrapped '{filename}' -> Type: {fields['transaction_type']}, Date: {fields['date']}, Amt: Rs.{fields['amount']:.2f}")
 
-    if not extracted_records:
-        print("No invoices to process.")
+    if not records:
+        print("No transactions to process.")
         conn.close()
         return
-        
+
     # Sort chronologically (date ascending)
-    extracted_records.sort(key=lambda x: x["date"])
-    
-    # Load daily cashflow balances if CSV exists
-    csv_balances = {}
-    csv_path = os.path.join(base_dir, "data", "synthetic", "historical_cashflow.csv")
-    if os.path.exists(csv_path):
-        try:
-            df = pd.read_csv(csv_path)
-            for _, row in df.iterrows():
-                csv_balances[str(row["date"])] = float(row["balance"])
-        except Exception as e:
-            print(f"Failed to read historical cashflow CSV: {e}")
-            
+    records.sort(key=lambda x: x["date"])
+
+    # Recompute running balance and system outcome labels
+    # Balance is calculated live: starting + Σ(in) - Σ(out)
     running_balance = STARTING_BALANCE
     print(f"\nRecalculating running balances (Starting Balance: Rs.{STARTING_BALANCE:.2f}):")
-    print("-" * 90)
-    print(f"{'Date':<12} | {'Vendor':<28} | {'Amount':<10} | {'New Balance':<12} | {'Outcome':<9} | {'Category'}")
-    print("-" * 90)
-    
-    for record in extracted_records:
+    print("-" * 100)
+    print(f"{'Date':<12} | {'Type':<10} | {'Vendor/Client':<28} | {'Amount':<10} | {'Balance':<12} | {'Outcome':<9} | {'Category'}")
+    print("-" * 100)
+
+    for record in records:
         row_id = record["id"]
         date_str = record["date"]
-        vendor = record["vendor"]
+        vendor = record["vendor_or_client"]
         amount = record["amount"]
         category = record["category"]
-        
-        # Get balance from CSV if available, otherwise fallback to old running balance calculation
-        if date_str in csv_balances:
-            invoice_balance = csv_balances[date_str]
-        else:
+        txn_type = record["transaction_type"]
+
+        # Apply transaction to running balance based on type
+        if txn_type in ("income", "return_in"):
+            running_balance += amount
+        else:  # expense, return_out
             running_balance -= amount
-            invoice_balance = running_balance
-        
+
         # System-computed outcome based on financial health thresholds
-        system_outcome = "healthy" if invoice_balance >= BALANCE_ALERT_THRESHOLD else "strained"
-        
-        # Update running balance and system outcome — user_outcome is NEVER touched here
+        system_outcome = "healthy" if running_balance >= BALANCE_ALERT_THRESHOLD else "strained"
+
+        # Update system outcome label — user_outcome is NEVER touched here
         cursor.execute("""
-            UPDATE invoices 
-            SET cash_balance_at_time = ?, outcome_label = ? 
+            UPDATE transactions 
+            SET outcome_label = ? 
             WHERE id = ?
-        """, (invoice_balance, system_outcome, row_id))
-        
+        """, (system_outcome, row_id))
+
         # Display user_outcome if set, otherwise show system outcome
         display_outcome = record.get("user_outcome") or system_outcome
-        running_balance = invoice_balance
-        print(f"{date_str:<12} | {vendor[:28]:<28} | Rs.{amount:<9.2f} | Rs.{running_balance:<11.2f} | {display_outcome:<14} | {category}")
-        
+        type_indicator = "+" if txn_type in ("income", "return_in") else "-"
+        print(f"{date_str:<12} | {txn_type:<10} | {vendor[:28]:<28} | {type_indicator}Rs.{amount:<8.2f} | Rs.{running_balance:<11.2f} | {display_outcome:<14} | {category}")
+
     conn.commit()
     conn.close()
     print("=" * 60)
     print("DATABASE SYNCHRONIZATION COMPLETE")
     print("=" * 60)
 
+# Keep backward compatibility — old code may call parse_and_store_invoices()
+parse_and_store_invoices = parse_and_store_transactions
+
 if __name__ == "__main__":
-    parse_and_store_invoices()
+    parse_and_store_transactions()

@@ -106,42 +106,57 @@ def extract_date(raw_text):
 def extract_amount(lines, raw_text):
     """
     Extracts the total invoice or transaction amount.
-    1. Looks for numbers following keyword patterns like 'total amount', 'total', 'grand total', 'amount'.
-    2. As a fallback, scans for the largest decimal value in the document,
-       excluding obvious non-currency numbers like transaction references or enrollment IDs.
+    Handles currency symbols (₹, $, Rs.), comma formatting (52,552.50 or 1,50,000.00), and decimals.
+    1. Looks for numbers following explicit keywords like 'total amount', 'grand total', 'total', 'net amount'.
+    2. As fallback, scans for the largest valid monetary value in the document.
     """
-    amount_keywords = ["total amount", "total", "amount", "fees", "fee", "particulars amount", "received"]
-    
-    # Find all float values (e.g. 3250.00, 45.50)
-    # We look for standard monetary numbers (decimals with 2 digits)
-    decimal_numbers = re.findall(r'\b\d+(?:\.\d{2})\b', raw_text)
-    
-    if decimal_numbers:
-        # Convert to float and filter out extremely large numbers that are likely IDs
-        candidates = []
-        for num_str in decimal_numbers:
-            val = float(num_str)
-            if 1.0 <= val < 1000000.0:  # Sensible range for transactional bills
-                candidates.append(val)
-                
-        # 1. Look for keywords in context
-        for keyword in amount_keywords:
-            for line in lines:
-                if keyword.lower() in line.lower():
-                    # Find any numeric match in this specific line
-                    line_decimals = re.findall(r'\b\d+(?:\.\d{2})\b', line)
-                    if line_decimals:
-                        return float(line_decimals[0])
-                        
-        # 2. Fallback: if no keyword matched, return the maximum decimal number
-        # On a invoice, the grand total is usually the largest printed monetary value
-        if candidates:
-            return max(candidates)
+    # Regex matching currency numbers with optional commas (e.g. 52,552.50 or 50,050 or 47000.00)
+    number_pattern = r'\b\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?\b|\b\d+(?:\.\d{1,2})?\b'
 
-    # 3. Last resort: look for any integer numbers that might represent the total
-    integers = re.findall(r'\b\d{3,6}\b', raw_text)
-    if integers:
-        return float(max([int(i) for i in integers]))
+    def parse_float(val_str):
+        try:
+            clean = val_str.replace(',', '').strip()
+            v = float(clean)
+            return v if 1.0 <= v < 10000000.0 else None
+        except ValueError:
+            return None
+
+    # 1. Look for explicit TOTAL / GRAND TOTAL lines first (ignoring 'subtotal' lines)
+    total_keywords = ["total amount", "grand total", "total payable", "net amount", "total:"]
+    for keyword in total_keywords:
+        for line in lines:
+            line_clean = line.lower()
+            if keyword in line_clean and "subtotal" not in line_clean and "sub total" not in line_clean:
+                matches = re.findall(number_pattern, line)
+                vals = [parse_float(m) for m in matches if parse_float(m) is not None]
+                if vals:
+                    return max(vals)
+
+    # 2. Look for any line containing 'total' (even standalone 'TOTAL')
+    for line in lines:
+        line_clean = line.lower()
+        if "total" in line_clean and "subtotal" not in line_clean and "sub total" not in line_clean:
+            matches = re.findall(number_pattern, line)
+            vals = [parse_float(m) for m in matches if parse_float(m) is not None]
+            if vals:
+                return max(vals)
+
+    # 3. Look for generic keywords: 'subtotal', 'amount', 'fees', 'received', 'particulars'
+    generic_keywords = ["subtotal", "sub total", "amount", "fees", "fee", "received", "particulars"]
+    for keyword in generic_keywords:
+        for line in lines:
+            if keyword in line.lower():
+                matches = re.findall(number_pattern, line)
+                vals = [parse_float(m) for m in matches if parse_float(m) is not None]
+                if vals:
+                    return max(vals)
+
+    # 4. Global Fallback: return maximum sensible monetary number in document
+    all_matches = re.findall(number_pattern, raw_text)
+    all_vals = [parse_float(m) for m in all_matches if parse_float(m) is not None]
+
+    if all_vals:
+        return max(all_vals)
 
     return 0.0
 
@@ -161,22 +176,90 @@ def classify_category(raw_text):
                 
     return "Miscellaneous"
 
+def classify_transaction_type(raw_text, vendor):
+    """
+    Classifies the transaction as income, expense, return_in, or return_out
+    based on keyword signals in the document text.
+
+    Classification rules:
+    - Educational fee receipts, college bills, exam fees, utility bills -> expense
+    - Sales invoices, supermarket bills, itemized POS receipts (Qty Rate Amount, Payment: UPI/Cash) -> income
+    - Negative refund clauses ("will not be refunded", "non-refundable") -> NOT a refund
+    - Explicit refund/credit notes ("refund voucher", "refund received") -> return_in
+    - Default -> expense
+    """
+    text_lower = raw_text.lower()
+
+    # 1. Remove disclaimer clauses that contain 'refund' in a negative context
+    disclaimer_phrases = [
+        "will not be refunded", "non-refundable", "non refundable",
+        "no refund", "not refundable", "cannot be refunded", "fees once paid"
+    ]
+    cleaned_text = text_lower
+    for phrase in disclaimer_phrases:
+        cleaned_text = cleaned_text.replace(phrase, "")
+
+    # 2. Check for return_out (refund given to customer)
+    refund_out_keywords = ["refund given", "refund to customer", "credit note issued", "amount refunded to"]
+    for keyword in refund_out_keywords:
+        if keyword in cleaned_text:
+            return "return_out"
+
+    # 3. Check for return_in (refund received by user from vendor)
+    refund_in_keywords = ["credit note", "refund voucher", "refund credited", "amount refunded", "refund received", "credit memo"]
+    for keyword in refund_in_keywords:
+        if keyword in cleaned_text:
+            return "return_in"
+
+    # 4. Explicit expense override for educational fees, utilities, hostel fees, purchase orders
+    expense_keywords = [
+        "fee receipt", "tuition fee", "exam fee", "college of engineering",
+        "school fee", "admission fee", "hostel fee", "utility bill", "electricity bill",
+        "purchase order", "vendor invoice", "payable to", "bill to:"
+    ]
+    for keyword in expense_keywords:
+        if keyword in cleaned_text:
+            return "expense"
+
+    # 5. Income / Sales Signals (sales invoices, customer receipts, itemized retail/sales bills)
+    income_keywords = [
+        "payment received", "amount received", "sales invoice",
+        "service invoice", "client invoice", "paid by client", "received from",
+        "qty rate amount", "item qty rate", "rate amount",
+        "payment: upi", "payment: cash", "payment: card", "payment: net banking",
+        "thank you!", "thank you for shopping", "tax invoice", "bill of supply"
+    ]
+    for keyword in income_keywords:
+        if keyword in cleaned_text:
+            return "income"
+
+    # Default: if the document is from a vendor to the user, it's an expense
+    return "expense"
+
+
 def extract_fields(raw_text):
     """
-    Main extraction interface. Accepts raw text and extracts the 4 primary fields.
+    Main extraction interface. Accepts raw text and extracts the 5 primary fields:
+    - vendor (vendor_or_client)
+    - amount
+    - date
+    - category
+    - transaction_type (income / expense / return_in / return_out)
     """
     lines = clean_extracted_text(raw_text)
-    
+
     vendor = extract_vendor(lines, raw_text)
     date_val = extract_date(raw_text)
     amount = extract_amount(lines, raw_text)
     category = classify_category(raw_text)
-    
+    transaction_type = classify_transaction_type(raw_text, vendor)
+
     return {
         "vendor": vendor,
         "amount": amount,
         "date": date_val,
-        "category": category
+        "category": category,
+        "transaction_type": transaction_type
     }
 
 if __name__ == "__main__":

@@ -7,57 +7,55 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), DB_NAME)
 def initialize_database():
     """
     Initializes the SQLite database schema for FinSense.
-    Creates the 'invoices' table with appropriate fields to store structured data 
-    extracted from invoices.
+    Creates the 'transactions' table to store all financial records —
+    both income and expenses — with a transaction_type field that determines
+    how each record affects the live-calculated balance.
+
+    Balance is NEVER stored in the database. It is always calculated live:
+        balance = starting_balance + Σ(income) + Σ(return_in) - Σ(expense) - Σ(return_out)
     """
     print(f"Connecting to database at: {DB_PATH}")
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Create the invoices table
+    # Create the transactions table
     # Columns:
     # - id: Unique auto-incrementing key
-    # - vendor: Name of the seller/vendor
-    # - amount: Total invoice amount (decimal/real)
-    # - category: Expense category (e.g., Marketing, Software, Utilities, Rent)
-    # - date: Document date in YYYY-MM-DD format
-    # - cash_balance_at_time: Starting or recorded balance of the company at the invoice date
-    # - outcome_label: Tag indicating the outcome of paying this invoice (e.g., "healthy", "strained")
-    # - user_notes: User notes / reasoning for the spend
+    # - vendor_or_client: Name of the vendor (expense) or client (income)
+    # - amount: Transaction amount (always positive; direction is determined by transaction_type)
+    # - transaction_type: 'income' | 'expense' | 'return_in' | 'return_out'
+    #     income     = money coming in (client payments, sales)
+    #     expense    = money going out (vendor invoices, operating costs)
+    #     return_in  = refund received (money back to you)
+    #     return_out = refund given (money back to customer)
+    # - category: Spend/income category (e.g., Education, Software, Sales Revenue)
+    # - date: Transaction date in YYYY-MM-DD format
+    # - outcome_label: System-computed tag ('healthy' / 'strained' / null)
+    # - user_notes: User-added notes / reasoning for the transaction
+    # - user_outcome: User-set custom outcome label (e.g., 'Productive', 'Wasteful')
     # - created_at: Timestamp of entry creation in database
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS invoices (
+        CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            vendor TEXT NOT NULL,
+            vendor_or_client TEXT NOT NULL,
             amount REAL NOT NULL,
+            transaction_type TEXT NOT NULL CHECK(transaction_type IN ('income','expense','return_in','return_out')),
             category TEXT NOT NULL,
             date TEXT NOT NULL,
-            cash_balance_at_time REAL NOT NULL,
-            outcome_label TEXT NOT NULL,
+            outcome_label TEXT,
             user_notes TEXT,
+            user_outcome TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
     conn.commit()
-    print("Invoices table verified/created successfully.")
+    print("Transactions table verified/created successfully.")
     
-    # Run migrations to ensure existing tables get the user_notes column
-    cursor.execute("PRAGMA table_info(invoices)")
-    columns = [col[1] for col in cursor.fetchall()]
-    if "user_notes" not in columns:
-        cursor.execute("ALTER TABLE invoices ADD COLUMN user_notes TEXT")
-        conn.commit()
-        print("Added 'user_notes' column to 'invoices' table migration successfully.")
-    if "user_outcome" not in columns:
-        cursor.execute("ALTER TABLE invoices ADD COLUMN user_outcome TEXT DEFAULT ''")
-        conn.commit()
-        print("Added 'user_outcome' column to 'invoices' table migration successfully.")
-    
-    # Optional: Verify database table exists
-    cursor.execute("PRAGMA table_info(invoices)")
+    # Verify database table schema
+    cursor.execute("PRAGMA table_info(transactions)")
     columns = cursor.fetchall()
-    print("\nTable Schema ('invoices'):")
+    print("\nTable Schema ('transactions'):")
     for col in columns:
         print(f" - {col[1]} ({col[2]})")
 
