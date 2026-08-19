@@ -102,6 +102,34 @@ def call_gemini_rest_api(api_key, system_instruction, prompt_text):
     return None
 
 
+def normalize_search_query(user_query):
+    """
+    Translates or augments non-English / Tamil user queries for ChromaDB vector search compatibility.
+    """
+    search_text = user_query
+    
+    # Check if query contains Tamil script characters (Unicode block \u0B80 - \u0BFF)
+    if any('\u0b80' <= char <= '\u0bff' for char in user_query):
+        tamil_map = {
+            "காலேஜ்": "college",
+            "ஃபீஸ்": "fees tuition",
+            "பையனுக்கு": "son child family",
+            "கட்டலாமா": "pay spend fee",
+            "லேப்டாப்": "laptop computer",
+            "வாடகை": "rent lease",
+            "கணினி": "computer",
+            "விளம்பரம்": "advertising marketing",
+            "கட்டணம்": "fee payment"
+        }
+        augmented = [eng for word, eng in tamil_map.items() if word in user_query]
+        if augmented:
+            search_text = f"{user_query} {' '.join(augmented)}"
+        else:
+            search_text = f"{user_query} college tuition fees expense"
+            
+    return search_text
+
+
 def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     """
     RAG Fusion Engine Main Entry Point:
@@ -111,9 +139,10 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     4. Constructs structured prompt for Gemini API (supporting English & Tamil)
     5. Calls Gemini model to generate explainable financial advice
     """
-    # 1. Retrieve Similar Cases from ChromaDB Vector Store
+    # 1. Retrieve Similar Cases from ChromaDB Vector Store with Normalized Search Text
     try:
-        retrieved_cases = query_similar_cases(query_text=user_query, top_k=top_k)
+        search_query = normalize_search_query(user_query)
+        retrieved_cases = query_similar_cases(query_text=search_query, top_k=top_k)
     except Exception as e:
         print(f"[RAG Engine] Vector search warning: {e}")
         retrieved_cases = []
