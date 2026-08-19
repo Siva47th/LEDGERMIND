@@ -35,17 +35,12 @@ def get_vector_store():
 
 def seed_initial_cases():
     """
-    Seeds ~60 realistic small-business case memories into ChromaDB if collection is empty.
+    Seeds realistic small-business & education case memories into ChromaDB.
     Each case contains a rich text representation for semantic retrieval,
     along with outcome labels ('healthy' or 'strained').
     """
     _, col = get_vector_store()
-    
-    if col.count() > 0:
-        print(f"[Case Memory] Collection already seeded with {col.count()} cases. Skipping initial seed.")
-        return
-
-    print("[Case Memory] Seeding initial small-business case memory database...")
+    print("[Case Memory] Seeding/Updating small-business & family education case memory database...")
 
     seed_cases = [
         # --- EQUIPMENT & HARDWARE ---
@@ -94,7 +89,12 @@ def seed_initial_cases():
 
         # --- REFUNDS & RETURNS ---
         {"id": "case_801", "vendor": "Dell India (Vendor Refund)", "amount": 8500.0, "type": "return_in", "category": "Shopping", "outcome": "healthy", "notes": "Received partial refund credited to account for returned damaged monitor."},
-        {"id": "case_802", "vendor": "Customer Refund Issued", "amount": 3200.0, "type": "return_out", "category": "Shopping", "outcome": "healthy", "notes": "Refund given to customer for returned defective item."}
+        {"id": "case_802", "vendor": "Customer Refund Issued", "amount": 3200.0, "type": "return_out", "category": "Shopping", "outcome": "healthy", "notes": "Refund given to customer for returned defective item."},
+
+        # --- PERSONAL & FAMILY EDUCATION EXPENSES ---
+        {"id": "case_901", "vendor": "IFET College of Engineering", "amount": 50000.0, "type": "expense", "category": "Education", "outcome": "strained", "notes": "Paid annual college tuition fees of ₹50,000 for son. Caused temporary liquidity strain, but cash balance recovered within 3 weeks from store revenue."},
+        {"id": "case_902", "vendor": "Anna University Fees", "amount": 45000.0, "type": "expense", "category": "Education", "outcome": "strained", "notes": "Paid college semester tuition fee of ₹45,000 for son's degree. Required staggering equipment purchases to keep cash reserve above safety threshold."},
+        {"id": "case_903", "vendor": "School Annual Tuition", "amount": 25000.0, "type": "expense", "category": "Education", "outcome": "healthy", "notes": "Paid annual school admission & tuition fees of ₹25,000 for child. Budgeted in advance from accumulated monthly cash reserve."}
     ]
 
     documents = []
@@ -118,9 +118,9 @@ def seed_initial_cases():
         })
         ids.append(case["id"])
 
-    # Batch add to ChromaDB
-    col.add(documents=documents, metadatas=metadatas, ids=ids)
-    print(f"[Case Memory] Successfully seeded {len(ids)} small-business case memories into ChromaDB!")
+    # Batch upsert to ChromaDB
+    col.upsert(documents=documents, metadatas=metadatas, ids=ids)
+    print(f"[Case Memory] Successfully seeded/updated {len(ids)} small-business & education case memories in ChromaDB!")
 
 
 def add_case_memory(txn_id, vendor_or_client, amount, transaction_type, category, notes, outcome="healthy"):
