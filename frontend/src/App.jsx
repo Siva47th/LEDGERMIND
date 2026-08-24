@@ -153,13 +153,20 @@ function App() {
     const q = queryText || advisorQuery;
     if (!q || !q.trim()) return;
 
+    // Auto-detect Tamil characters in query
+    const hasTamilScript = /[\u0B80-\u0BFF]/.test(q);
+    const targetLang = hasTamilScript ? 'ta' : advisorLang;
+    if (hasTamilScript && advisorLang !== 'ta') {
+      setAdvisorLang('ta');
+    }
+
     setAdvisorLoading(true);
     setAdvisorError(null);
     try {
       const res = await fetch(`${API_BASE}/advisor/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, language: advisorLang })
+        body: JSON.stringify({ query: q, language: targetLang })
       });
       if (!res.ok) throw new Error('Advisor engine request failed');
       const data = await res.json();

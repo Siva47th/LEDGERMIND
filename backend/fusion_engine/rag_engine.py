@@ -201,12 +201,16 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
         )
     formatted_cases = "\n".join(cases_text_list) if cases_text_list else "No similar past cases found."
 
+    # Auto-detect Tamil script or explicit language parameter
+    is_tamil_query = any('\u0b80' <= char <= '\u0bff' for char in user_query)
+    if is_tamil_query or language == "ta":
+        language = "ta"
+
     # Language Specific Instructions
     lang_instruction = ""
     if language == "ta":
         lang_instruction = (
-            "IMPORTANT LANGUAGE INSTRUCTION: The user prefers TAMIL language output. "
-            "Write the 'explanation', 'key_factors' array items, and 'suggested_action' in clean, natural Tamil text (using Tamil script). "
+            "IMPORTANT LANGUAGE INSTRUCTION: The user query is in TAMIL / Tanglish. You MUST write your response in clean, natural TAMIL (using Tamil script) for the 'explanation', 'key_factors' array items, and 'suggested_action'. "
             "Keep 'verdict' strictly as one of ['Recommended', 'Proceed with Caution', 'Not Recommended'] and keep 'estimated_post_balance' as a number."
         )
 
@@ -321,44 +325,71 @@ def extract_amount_from_query(user_query):
     return 10000.0
 
 
-def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight):
+def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language="en"):
     """Fallback rule engine if LLM call is unavailable or fails."""
+    is_tamil = language == "ta" or any('\u0b80' <= char <= '\u0bff' for char in user_query)
     est_amount = extract_amount_from_query(user_query)
     post_bal = current_balance - est_amount
 
     # Check for personal / education keyword context
-    is_personal_education = any(w in user_query.lower() for w in ['college', 'fees', 'tuition', 'son', 'school', 'education'])
+    is_personal_education = any(w in user_query.lower() for w in ['college', 'fees', 'tuition', 'son', 'school', 'education', 'காலேஜ்', 'ஃபீஸ்'])
 
     if post_bal >= 50000.0 and not is_personal_education:
         verdict = "Recommended"
         risk_level = "Low"
-        exp = f"Your current cash balance of Rs. {current_balance:,.2f} can easily absorb this proposal of ~Rs. {est_amount:,.2f}, leaving a healthy reserve of Rs. {post_bal:,.2f}."
-        action = "Proceed with standard purchase order."
+        if is_tamil:
+            exp = f"உங்கள் தற்போதைய ரொக்க இருப்பு ரூ. {current_balance:,.2f} இந்த ரூ. {est_amount:,.2f} செலவை எளிதில் தாங்கும். செலவுக்குப் பின் இருப்பு ரூ. {post_bal:,.2f} ஆக பாதுகாப்பாக இருக்கும்."
+            action = "கொள்முதல் திட்டத்துடன் தாராளமாக தொடரலாம்."
+        else:
+            exp = f"Your current cash balance of Rs. {current_balance:,.2f} can easily absorb this proposal of ~Rs. {est_amount:,.2f}, leaving a healthy reserve of Rs. {post_bal:,.2f}."
+            action = "Proceed with standard purchase order."
     elif post_bal >= BALANCE_ALERT_THRESHOLD:
         verdict = "Proceed with Caution"
         risk_level = "Medium"
         if is_personal_education:
-            exp = f"Paying Rs. {est_amount:,.2f} for college fees will reduce your cash balance to Rs. {post_bal:,.2f}. Similar past college fee payments (Anna University / IFET College) caused temporary cash flow strain."
-            action = "Proceed with payment, but record as an owner's draw and stagger non-essential business purchases."
+            if is_tamil:
+                exp = f"ரூ. {est_amount:,.2f} கல்லூரி கட்டணம் செலுத்துவது உங்கள் ரொக்க இருப்பை ரூ. {post_bal:,.2f} ஆக குறைக்கும். முந்தைய கல்லூரி கட்டண செலவுகள் தற்காலிக ரொக்க நெருக்கடியை ஏற்படுத்தின."
+                action = "கட்டணத்தை செலுத்தலாம், ஆனால் பிற அத்தியாவசியமற்ற செலவுகளை ஒத்திவைக்கவும்."
+            else:
+                exp = f"Paying Rs. {est_amount:,.2f} for college fees will reduce your cash balance to Rs. {post_bal:,.2f}. Similar past college fee payments (Anna University / IFET College) caused temporary cash flow strain."
+                action = "Proceed with payment, but record as an owner's draw and stagger non-essential business purchases."
         else:
-            exp = f"This expenditure of ~Rs. {est_amount:,.2f} will lower your cash reserves to Rs. {post_bal:,.2f}, which is close to your safety threshold of Rs. {BALANCE_ALERT_THRESHOLD:,.2f}."
-            action = "Review short-term receivables before executing this transaction."
+            if is_tamil:
+                exp = f"இந்த ரூ. {est_amount:,.2f} செலவு உங்கள் ரொக்க இருப்பை ரூ. {post_bal:,.2f} ஆக குறைக்கும். இது உங்கள் குறைந்தபட்ச பாதுகாப்பு வரம்பான ரூ. {BALANCE_ALERT_THRESHOLD:,.2f}-க்கு அருகில் உள்ளது."
+                action = "செலவு செய்யும் முன் குறுகிய கால வரவுகளை சரிபார்க்கவும்."
+            else:
+                exp = f"This expenditure of ~Rs. {est_amount:,.2f} will lower your cash reserves to Rs. {post_bal:,.2f}, which is close to your safety threshold of Rs. {BALANCE_ALERT_THRESHOLD:,.2f}."
+                action = "Review short-term receivables before executing this transaction."
     else:
         verdict = "Not Recommended"
         risk_level = "High"
-        exp = f"Warning: This outlay of ~Rs. {est_amount:,.2f} will drop your cash balance to Rs. {post_bal:,.2f}, which breaches your safety threshold of Rs. {BALANCE_ALERT_THRESHOLD:,.2f}."
-        action = "Defer or reduce payment amount to avoid liquidity breach."
+        if is_tamil:
+            exp = f"எச்சரிக்கை: இந்த ரூ. {est_amount:,.2f} செலவு உங்கள் ரொக்க இருப்பை ரூ. {post_bal:,.2f} ஆக குறைக்கும். இது உங்கள் பாதுகாப்பு வரம்பை விட குறைவாகும்."
+            action = "ரொக்க நெருக்கடியை தவிர்க்க இச்செலவை ஒத்திவைக்கவும்."
+        else:
+            exp = f"Warning: This outlay of ~Rs. {est_amount:,.2f} will drop your cash balance to Rs. {post_bal:,.2f}, which breaches your safety threshold of Rs. {BALANCE_ALERT_THRESHOLD:,.2f}."
+            action = "Defer or reduce payment amount to avoid liquidity breach."
 
-    key_factors = [
-        f"Live cash balance: Rs. {current_balance:,.2f}",
-        f"Parsed proposal outlay: Rs. {est_amount:,.2f}",
-        f"Projected post-transaction reserve: Rs. {post_bal:,.2f}"
-    ]
+    if is_tamil:
+        key_factors = [
+            f"தற்போதைய ரொக்க இருப்பு: ரூ. {current_balance:,.2f}",
+            f"கணக்கிடப்பட்ட செலவு: ரூ. {est_amount:,.2f}",
+            f"செலவுக்குப் பின் எதிர்பார்க்கப்படும் இருப்பு: ரூ. {post_bal:,.2f}"
+        ]
+    else:
+        key_factors = [
+            f"Live cash balance: Rs. {current_balance:,.2f}",
+            f"Parsed proposal outlay: Rs. {est_amount:,.2f}",
+            f"Projected post-transaction reserve: Rs. {post_bal:,.2f}"
+        ]
 
     if retrieved_cases:
         strained_count = sum(1 for c in retrieved_cases if c.get("outcome") == "strained" or c.get("metadata", {}).get("outcome") == "strained")
         if strained_count > 0:
-            key_factors.append(f"{strained_count} similar past case(s) in history resulted in temporary liquidity strain.")
+            if is_tamil:
+                key_factors.append(f"கடந்த காலத்தில் {strained_count} ஒத்த பரிவர்த்தனைகள் தற்காலிக ரொக்க நெருக்கடியை ஏற்படுத்தின.")
+            else:
+                key_factors.append(f"{strained_count} similar past case(s) in history resulted in temporary liquidity strain.")
 
     return {
         "verdict": verdict,
