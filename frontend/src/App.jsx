@@ -36,6 +36,8 @@ import './App.css';
 
 const API_BASE = 'http://localhost:5000/api';
 
+const isTamilScript = (str) => Boolean(str && /[\u0b80-\u0bff]/.test(str));
+
 const CATEGORY_COLORS = {
   'Education': '#818cf8',    // Indigo
   'Utilities': '#2dd4bf',    // Teal
@@ -2125,7 +2127,7 @@ function App() {
                       
                       {/* Verdict Banner Card */}
                       {(() => {
-                        const isQueryTamil = advisorQuery && anyCharIsTamil(advisorQuery);
+                        const isQueryTamil = advisorQuery && isTamilScript(advisorQuery);
                         return (
                           <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '20px', border: `1px solid ${advisorResult.verdict === 'Recommended' ? '#bbf7d0' : advisorResult.verdict === 'Proceed with Caution' ? '#fde68a' : '#fca5a5'}`, background: 'rgba(255, 255, 255, 0.85)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.08)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
@@ -2255,7 +2257,7 @@ function App() {
                     <div className="glass-card" style={{ padding: '2rem', borderRadius: '20px', marginBottom: '1.5rem', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
                       <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <Sparkles size={20} color="#4338ca" />
-                        {advisorQuery && anyCharIsTamil(advisorQuery) ? 'விளக்கமளிக்கப்பட்ட பரிந்துரை காரணம்' : 'Explainable Recommendation Rationale'}
+                        {advisorQuery && isTamilScript(advisorQuery) ? 'விளக்கமளிக்கப்பட்ட பரிந்துரை காரணம்' : 'Explainable Recommendation Rationale'}
                       </h4>
                       
                       <p style={{ fontSize: '0.95rem', color: '#1e293b', fontWeight: 600, lineHeight: 1.6, marginBottom: '1.25rem' }}>
@@ -2265,7 +2267,7 @@ function App() {
                       {advisorResult.key_factors && advisorResult.key_factors.length > 0 && (
                         <div>
                           <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
-                            {advisorQuery && anyCharIsTamil(advisorQuery) ? 'முக்கிய தீர்மான காரணிகள்' : 'Key Decision Factors'}
+                            {advisorQuery && isTamilScript(advisorQuery) ? 'முக்கிய தீர்மான காரணிகள்' : 'Key Decision Factors'}
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             {advisorResult.key_factors.map((factor, idx) => (
