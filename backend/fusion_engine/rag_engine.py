@@ -222,7 +222,7 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     )
 
     # Parse expected amount from query
-    parsed_amount = extract_amount_from_query(user_query)
+    parsed_amount = extract_amount_from_query(user_query, api_key=api_key)
     expected_post_bal = current_balance - parsed_amount
 
     prompt = f"""
@@ -294,10 +294,10 @@ Analyze the user proposal and respond in STRICT JSON format with EXACTLY these k
         return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight)
 
 
-def extract_amount_from_query(user_query):
+def extract_amount_from_query(user_query, api_key=None):
     """
-    Extracts numerical transaction amount from natural language queries like:
-    '50000rs', 'Rs. 75,000', '₹50,000', '50k', '45000 rupees', '75000'
+    Extracts numerical transaction amount from natural language queries in English, Tamil, or Tanglish:
+    '50000rs', 'Rs. 75,000', '₹50,000', '50k', '45000 rupees', 'இருபதாயிரத்தில்', '20k'
     """
     import re
     query = user_query.lower()
@@ -307,7 +307,7 @@ def extract_amount_from_query(user_query):
     if k_match:
         return float(k_match.group(1)) * 1000.0
 
-    # 2. Extract numbers even if attached to letters like '50000rs' or 'rs.50000'
+    # 2. Extract explicit Arabic numerals (e.g., 50000, 20,000, 75000)
     numbers = re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', query)
     clean_amounts = []
     for a in numbers:
@@ -321,7 +321,73 @@ def extract_amount_from_query(user_query):
             
     if clean_amounts:
         return max(clean_amounts)
-        
+
+    # 3. Tamil & Tanglish number words dictionary
+    tamil_number_patterns = [
+        # Lakhs
+        (r'ஒரு\s*லட்சம|1\s*லட்சம|லட்சம|லட்சத்தில்|லக்ஷம', 100000.0),
+        (r'இரண்டு\s*லட்சம|ரெண்டு\s*லட்சம|2\s*லட்சம', 200000.0),
+        (r'அரை\s*லட்சம', 50000.0),
+        # Tens of Thousands (Tamil script)
+        (r'தொன்னூறாயிர|தொன்னூறு\s*ஆயிர', 90000.0),
+        (r'எண்பத்தைந்தாயிர|எண்பத்தைந்து\s*ஆயிர', 85000.0),
+        (r'எண்பதாயிர|எண்பது\s*ஆயிர', 80000.0),
+        (r'எழுபத்தைந்தாயிர|எழுபத்தைந்து\s*ஆயிர', 75000.0),
+        (r'எழுபதாயிர|எழுபது\s*ஆயிர', 70000.0),
+        (r'அறுபத்தைந்தாயிர|அறுபத்தைந்து\s*ஆயிர', 65000.0),
+        (r'அறுபதாயிர|அறுபது\s*ஆயிர', 60000.0),
+        (r'ஐம்பத்தைந்தாயிர|ஐம்பத்தைந்து\s*ஆயிர', 55000.0),
+        (r'ஐம்பதாயிர|ஐம்பது\s*ஆயிர', 50000.0),
+        (r'நாற்பத்தைந்தாயிர|நாற்பத்தைந்து\s*ஆயிர', 45000.0),
+        (r'நாற்பதாயிர|நாற்பது\s*ஆயிர', 40000.0),
+        (r'முப்பத்தைந்தாயிர|முப்பத்தைந்து\s*ஆயிர', 35000.0),
+        (r'முப்பதாயிர|முப்பது\s*ஆயிர', 30000.0),
+        (r'இருபத்தைந்தாயிர|இருபத்தைந்து\s*ஆயிர', 25000.0),
+        (r'இருபதாயிர|இருபது\s*ஆயிர', 20000.0),
+        (r'பதினைந்தாயிர|பதினைந்து\s*ஆயிர', 15000.0),
+        (r'பத்தாயிர|பத்து\s*ஆயிர', 10000.0),
+        # Single Thousands (Tamil script)
+        (r'ஒன்பதாயிர|ஒன்பது\s*ஆயிர', 9000.0),
+        (r'எட்டாயிர|எட்டு\s*ஆயிர', 8000.0),
+        (r'ஏழாயிர|ஏழு\s*ஆயிர', 7000.0),
+        (r'ஆறாயிர|ஆறு\s*ஆயிர', 6000.0),
+        (r'ஐந்தாயிர|ஐந்து\s*ஆயிர', 5000.0),
+        (r'நான்காயிர|நாலாயிர|நான்கு\s*ஆயிர', 4000.0),
+        (r'மூன்றாயிர|மூன்று\s*ஆயிர', 3000.0),
+        (r'இரண்டாயிர|ரெண்டாயிர|இரண்டு\s*ஆயிர|ரெண்டு\s*ஆயிர', 2000.0),
+        (r'ஒராயிர|ஒரு\s*ஆயிர|ஆயிர', 1000.0),
+        # Tanglish
+        (r'irubathaayiram|irubathayiram|irupathayiram|irubadhayiram|20k', 20000.0),
+        (r'pathaayiram|pathayiram|pathadhayiram|10k', 10000.0),
+        (r'muppathayiram|30k', 30000.0),
+        (r'narpathayiram|40k', 40000.0),
+        (r'aimbathayiram|aimpathayiram|50k', 50000.0),
+        (r'arubathayiram|60k', 60000.0),
+        (r'ezhubathayiram|70k', 70000.0),
+        (r'enbathayiram|80k', 80000.0),
+    ]
+
+    for pattern, amt in tamil_number_patterns:
+        if re.search(pattern, query):
+            return amt
+
+    # 4. LLM Fallback Amount Extraction
+    if not api_key:
+        api_key = os.getenv("GEMINI_API_KEY")
+    if api_key:
+        try:
+            sys_prompt = "You are a financial query amount parser. Extract ONLY the intended monetary outlay amount in INR (Rupees) as a single float number from the input query. Respond ONLY with the numeric value (e.g. 20000). If no amount is mentioned, respond with 10000."
+            raw_amt = call_gemini_rest_api(api_key, sys_prompt, f"User Input Query: \"{user_query}\"")
+            if raw_amt:
+                amt_match = re.search(r'\d+(?:\.\d+)?', raw_amt.replace(',', ''))
+                if amt_match:
+                    parsed_val = float(amt_match.group(0))
+                    if parsed_val >= 100:
+                        print(f"[RAG Engine] LLM extracted transaction amount: Rs. {parsed_val:,.2f} from '{user_query}'")
+                        return parsed_val
+        except Exception as e:
+            print(f"[RAG Engine] LLM amount extraction warning: {e}")
+
     return 10000.0
 
 
