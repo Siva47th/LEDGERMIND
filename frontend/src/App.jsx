@@ -2037,21 +2037,33 @@ function App() {
                         onClick={toggleSpeechRecognition}
                         style={{
                           position: 'absolute',
-                          right: '0.6rem',
-                          background: isListening ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255,255,255,0.06)',
-                          border: `1px solid ${isListening ? '#ef4444' : 'rgba(255,255,255,0.1)'}`,
-                          color: isListening ? '#ef4444' : '#818cf8',
-                          borderRadius: '10px',
-                          padding: '0.5rem',
+                          right: '0.5rem',
+                          background: isListening 
+                            ? 'linear-gradient(135deg, #ef4444, #dc2626)' 
+                            : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                          border: 'none',
+                          color: '#ffffff',
+                          borderRadius: '12px',
+                          padding: '0.55rem 0.85rem',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          animation: isListening ? 'pulse 1.5s infinite' : 'none'
+                          gap: '0.35rem',
+                          fontWeight: 800,
+                          fontSize: '0.8rem',
+                          boxShadow: isListening 
+                            ? '0 0 18px rgba(239, 68, 68, 0.6)' 
+                            : '0 4px 14px rgba(99, 102, 241, 0.35)',
+                          transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                          transform: isListening ? 'scale(1.05)' : 'scale(1)',
+                          animation: isListening ? 'pulse 1.2s infinite' : 'none'
                         }}
                         title={isListening ? "Listening to your voice... Speak now!" : "Click to speak your question using microphone"}
                       >
-                        {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+                        {isListening ? <MicOff size={16} color="#ffffff" /> : <Mic size={16} color="#ffffff" />}
+                        <span style={{ fontSize: '0.75rem', letterSpacing: '0.02em' }}>
+                          {isListening ? (advisorLang === 'ta' ? 'கேட்கிறது...' : 'Listening...') : (advisorLang === 'ta' ? 'பேசவும்' : 'Voice')}
+                        </span>
                       </button>
                     </div>
 
@@ -2157,23 +2169,29 @@ function App() {
                                   type="button"
                                   onClick={speakRecommendation}
                                   style={{
-                                    background: isSpeaking ? '#e0e7ff' : '#ffffff',
-                                    border: '1px solid #c7d2fe',
-                                    color: '#4338ca',
-                                    borderRadius: '12px',
-                                    padding: '0.4rem 0.75rem',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 700,
+                                    background: isSpeaking 
+                                      ? 'linear-gradient(135deg, #f59e0b, #ef4444)' 
+                                      : 'linear-gradient(135deg, #4338ca, #6366f1)',
+                                    border: '1px solid rgba(255, 255, 255, 0.4)',
+                                    color: '#ffffff',
+                                    borderRadius: '25px',
+                                    padding: '0.5rem 1rem',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 800,
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.35rem',
-                                    boxShadow: '0 2px 6px rgba(99, 102, 241, 0.08)'
+                                    gap: '0.4rem',
+                                    boxShadow: isSpeaking 
+                                      ? '0 4px 16px rgba(239, 68, 68, 0.4)' 
+                                      : '0 4px 16px rgba(67, 56, 202, 0.35)',
+                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    letterSpacing: '0.02em'
                                   }}
                                   title="Listen to recommendation out loud (Text-to-Speech)"
                                 >
-                                  {isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                                  <span>{isSpeaking ? (isQueryTamil ? 'நிறுத்து' : 'Stop') : (isQueryTamil ? 'கேட்க' : 'Listen')}</span>
+                                  {isSpeaking ? <VolumeX size={17} color="#ffffff" /> : <Volume2 size={17} color="#ffffff" />}
+                                  <span>{isSpeaking ? (isQueryTamil ? 'நிறுத்து' : 'Stop Voice') : (isQueryTamil ? 'குரல் வழிகேட்க' : 'Listen Advice')}</span>
                                 </button>
 
                                 <span style={{ 
