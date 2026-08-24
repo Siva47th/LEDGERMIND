@@ -224,9 +224,9 @@ function App() {
     if (isNaN(n) || n <= 0) return '';
 
     const ones = ['', 'ஒன்று', 'இரண்டு', 'மூன்று', 'நான்கு', 'ஐந்து', 'ஆறு', 'ஏழு', 'எட்டு', 'ஒன்பது'];
-    const tensExact = ['', 'பத்து', 'இருபது', 'முப்பது', 'நாற்பது', 'ஐம்பது', 'அறுபது', 'எழுபது', 'எண்பது', 'தொன்னூறு'];
-    const tensPrefix = ['', 'பதினொன்று', 'இருபத்து ', 'முப்பத்து ', 'நாற்பத்து ', 'ஐம்பத்து ', 'அறுபத்து ', 'எழுபத்து ', 'எண்பத்து ', 'தொன்னூற்று '];
     const tensTeens = ['', 'பதினொன்று', 'பன்னிரண்டு', 'பதின்மூன்று', 'பதினான்கு', 'பதினைந்து', 'பதினாறு', 'பதினேழு', 'பதினெட்டு', 'பத்தொன்பது'];
+    const tensExact = ['', 'பத்து', 'இருபது', 'முப்பது', 'நாற்பது', 'ஐம்பது', 'அறுபது', 'எழுபது', 'எண்பது', 'தொன்னூறு'];
+    const tensPrefix = ['', 'பத்து', 'இருபத்து ', 'முப்பத்து ', 'நாற்பத்து ', 'ஐம்பத்து ', 'அறுபத்து ', 'எழுபத்து ', 'எண்பத்து ', 'தொன்னூற்று '];
 
     const getTwoDigits = (val) => {
       val = Math.floor(val);
@@ -246,32 +246,58 @@ function App() {
     if (n >= 10000000) {
       const crore = Math.floor(n / 10000000);
       n %= 10000000;
-      result += (crore === 1 ? 'ஒரு கோடி' : `${numberToTamilWords(crore)} கோடி`) + ' ';
+      const cWords = crore === 1 ? 'ஒரு கோடி' : `${numberToTamilWords(crore)} கோடி`;
+      result += (n > 0 ? `${cWords}யே ` : `${cWords} `);
     }
 
     // Lakhs (லட்சம்)
     if (n >= 100000) {
       const lakh = Math.floor(n / 100000);
       n %= 100000;
-      result += (lakh === 1 ? 'ஒரு லட்சம்' : `${numberToTamilWords(lakh)} லட்சம்`) + ' ';
+      const lWords = lakh === 1 ? 'ஒரு லட்சத்து' : `${numberToTamilWords(lakh)} லட்சத்து`;
+      const lExact = lakh === 1 ? 'ஒரு லட்சம்' : `${numberToTamilWords(lakh)} லட்சம்`;
+      result += (n > 0 ? `${lWords} ` : `${lExact} `);
     }
 
     // Thousands (ஆயிரம்)
     if (n >= 1000) {
       const th = Math.floor(n / 1000);
       n %= 1000;
-      const thWords = {
-        1: 'ஆயிரம்', 2: 'இரண்டாயிரம்', 3: 'மூன்றாயிரம்', 4: 'நான்காயிரம்', 5: 'ஐந்தாயிரம்',
-        6: 'ஆறாயிரம்', 7: 'ஏழாயிரம்', 8: 'எட்டாயிரம்', 9: 'ஒன்பதாயிரம்', 10: 'பத்தாயிரம்',
-        15: 'பதினைந்தாயிரம்', 20: 'இருபதாயிரம்', 25: 'இருபத்தைந்தாயிரம்', 30: 'முப்பதாயிரம்',
-        35: 'முப்பத்தைந்தாயிரம்', 40: 'நாற்பதாயிரம்', 45: 'நாற்பத்தைந்தாயிரம்', 50: 'ஐம்பதாயிரம்',
-        55: 'ஐம்பத்தைந்தாயிரம்', 60: 'அறுபதாயிரம்', 65: 'அறுபத்தைந்தாயிரம்', 70: 'எழுபதாயிரம்',
-        75: 'எழுபத்தைந்தாயிரம்', 80: 'எண்பதாயிரம்', 85: 'எண்பத்தைந்தாயிரம்', 90: 'தொன்னூறாயிரம்'
+      
+      const thousandMap = {
+        1: { exact: 'ஆயிரம்', prefix: 'ஆயிரத்து' },
+        2: { exact: 'இரண்டாயிரம்', prefix: 'இரண்டாயிரத்து' },
+        3: { exact: 'மூன்றாயிரம்', prefix: 'மூன்றாயிரத்து' },
+        4: { exact: 'நான்காயிரம்', prefix: 'நான்காயிரத்து' },
+        5: { exact: 'ஐந்தாயிரம்', prefix: 'ஐந்தாயிரத்து' },
+        6: { exact: 'ஆறாயிரம்', prefix: 'ஆறாயிரத்து' },
+        7: { exact: 'ஏழாயிரம்', prefix: 'ஏழாயிரத்து' },
+        8: { exact: 'எட்டாயிரம்', prefix: 'எட்டாயிரத்து' },
+        9: { exact: 'ஒன்பதாயிரம்', prefix: 'ஒன்பதாயிரத்து' },
+        10: { exact: 'பத்தாயிரம்', prefix: 'பத்தாயிரத்து' },
+        15: { exact: 'பதினைந்தாயிரம்', prefix: 'பதினைந்தாயிரத்து' },
+        20: { exact: 'இருபதாயிரம்', prefix: 'இருபதாயிரத்து' },
+        25: { exact: 'இருபத்தைந்தாயிரம்', prefix: 'இருபத்தைந்தாயிரத்து' },
+        30: { exact: 'முப்பதாயிரம்', prefix: 'முப்பதாயிரத்து' },
+        35: { exact: 'முப்பத்தைந்தாயிரம்', prefix: 'முப்பத்தைந்தாயிரத்து' },
+        40: { exact: 'நாற்பதாயிரம்', prefix: 'நாற்பதாயிரத்து' },
+        45: { exact: 'நாற்பத்தைந்தாயிரம்', prefix: 'நாற்பத்தைந்தாயிரத்து' },
+        50: { exact: 'ஐம்பதாயிரம்', prefix: 'ஐம்பதாயிரத்து' },
+        55: { exact: 'ஐம்பத்தைந்தாயிரம்', prefix: 'ஐம்பத்தைந்தாயிரத்து' },
+        60: { exact: 'அறுபதாயிரம்', prefix: 'அறுபதாயிரத்து' },
+        65: { exact: 'அறுபத்தைந்தாயிரம்', prefix: 'அறுபத்தைந்தாயிரத்து' },
+        70: { exact: 'எழுபதாயிரம்', prefix: 'எழுபதாயிரத்து' },
+        75: { exact: 'எழுபத்தைந்தாயிரம்', prefix: 'எழுபத்தைந்தாயிரத்து' },
+        80: { exact: 'எண்பதாயிரம்', prefix: 'எண்பதாயிரத்து' },
+        85: { exact: 'எண்பத்தைந்தாயிரம்', prefix: 'எண்பத்தைந்தாயிரத்து' },
+        90: { exact: 'தொன்னூறாயிரம்', prefix: 'தொன்னூறாயிரத்து' }
       };
-      if (thWords[th]) {
-        result += thWords[th] + ' ';
+
+      if (thousandMap[th]) {
+        result += (n > 0 ? `${thousandMap[th].prefix} ` : `${thousandMap[th].exact} `);
       } else {
-        result += `${getTwoDigits(th)} ஆயிரம் `;
+        const thText = getTwoDigits(th);
+        result += (n > 0 ? `${thText} ஆயிரத்து ` : `${thText} ஆயிரம் `);
       }
     }
 
@@ -279,8 +305,9 @@ function App() {
     if (n >= 100) {
       const h = Math.floor(n / 100);
       n %= 100;
-      const hundreds = ['', 'நூறு', 'இருநூறு', 'முன்னூறு', 'நானூறு', 'ஐநூறு', 'அறுநூறு', 'எழுநூறு', 'எண்ணூறு', 'தொள்ளாயிரம்'];
-      result += hundreds[h] + ' ';
+      const hundredExact = ['', 'நூறு', 'இருநூறு', 'முன்னூறு', 'நானூறு', 'ஐநூறு', 'அறுநூறு', 'எழுநூறு', 'எண்ணூறு', 'தொள்ளாயிரம்'];
+      const hundredPrefix = ['', 'நூற்று', 'இருநூற்று', 'முன்னூற்று', 'நானூற்று', 'ஐநூற்று', 'அறுநூற்று', 'எழுநூற்று', 'எண்ணூற்று', 'தொள்ளாயிரத்து'];
+      result += (n > 0 ? `${hundredPrefix[h]} ` : `${hundredExact[h]} `);
     }
 
     // Remaining Tens & Ones (1-99)
@@ -296,11 +323,17 @@ function App() {
     let clean = text;
 
     if (isTamil) {
-      // Remove hyphens before Tamil suffixes (e.g. -க்கு -> க்கு, -இல் -> இல்)
-      clean = clean.replace(/-\s*([அ-ஹா-ௌ்]+)/g, ' $1');
-      clean = clean.replace(/-/g, ' ');
+      // 1. Convert patterns like ₹65,000-க்கு / 65,000-க்கு / Rs. 65,000-க்கு
+      clean = clean.replace(/(?:Rs\.|Rs|₹|ரூ\.|ரூ)?\s*([\d,]+(?:\.\d+)?)\s*-\s*க்கு/gi, (match, p1) => {
+        const num = parseFloat(p1.replace(/,/g, ''));
+        if (!isNaN(num)) {
+          const words = numberToTamilWords(num);
+          return words ? `ரூபாய் ${words}க்கு` : `${num}க்கு`;
+        }
+        return match;
+      });
 
-      // Replace currency symbols/codes (Rs., ₹, ரூ., ரூ) followed by numeric amounts
+      // 2. Convert currency symbols (Rs., ₹, ரூ., ரூ) followed by amounts
       clean = clean.replace(/(?:Rs\.|Rs|₹|ரூ\.|ரூ)\s*([\d,]+(?:\.\d+)?)/gi, (match, p1) => {
         const num = parseFloat(p1.replace(/,/g, ''));
         if (!isNaN(num)) {
@@ -310,7 +343,11 @@ function App() {
         return `ரூபாய் ${p1}`;
       });
 
-      // Replace standalone numbers with Tamil words so TTS doesn't spell them digit-by-digit
+      // 3. Remove stray hyphens before Tamil words
+      clean = clean.replace(/-\s*([அ-ஹா-ௌ்]+)/g, ' $1');
+      clean = clean.replace(/-/g, ' ');
+
+      // 4. Replace standalone numeric figures with accurate Tamil words
       clean = clean.replace(/\b\d+(?:,\d+)*(?:\.\d+)?\b/g, (match) => {
         const num = parseFloat(match.replace(/,/g, ''));
         if (!isNaN(num)) {
@@ -320,7 +357,7 @@ function App() {
         return match;
       });
 
-      // Translate English verdict names for TTS if present
+      // 5. Translate common English term markers in response
       clean = clean.replace(/\bRecommended\b/gi, 'பரிந்துரைக்கப்படுகிறது');
       clean = clean.replace(/\bProceed with Caution\b/gi, 'எச்சரிக்கையுடன் தொடரவும்');
       clean = clean.replace(/\bNot Recommended\b/gi, 'பரிந்துரைக்கப்படவில்லை');
