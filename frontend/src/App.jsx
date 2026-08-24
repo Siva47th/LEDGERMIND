@@ -2124,84 +2124,97 @@ function App() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
                       
                       {/* Verdict Banner Card */}
-                      <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '20px', border: `1px solid ${advisorResult.verdict === 'Recommended' ? '#bbf7d0' : advisorResult.verdict === 'Proceed with Caution' ? '#fde68a' : '#fca5a5'}`, background: 'rgba(255, 255, 255, 0.85)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.08)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                          <div>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Recommendation</span>
-                            <h4 style={{ 
-                              margin: '0.25rem 0 0 0', 
-                              fontSize: '1.6rem', 
-                              fontWeight: 800, 
-                              color: advisorResult.verdict === 'Recommended' ? '#166534' : advisorResult.verdict === 'Proceed with Caution' ? '#b45309' : '#b91c1c',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.5rem'
-                            }}>
-                              {advisorResult.verdict === 'Recommended' && <CheckCircle size={24} color="#166534" />}
-                              {advisorResult.verdict === 'Proceed with Caution' && <ShieldAlert size={24} color="#b45309" />}
-                              {advisorResult.verdict === 'Not Recommended' && <AlertCircle size={24} color="#b91c1c" />}
-                              {advisorResult.verdict}
-                            </h4>
-                          </div>
+                      {(() => {
+                        const isQueryTamil = advisorQuery && anyCharIsTamil(advisorQuery);
+                        return (
+                          <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '20px', border: `1px solid ${advisorResult.verdict === 'Recommended' ? '#bbf7d0' : advisorResult.verdict === 'Proceed with Caution' ? '#fde68a' : '#fca5a5'}`, background: 'rgba(255, 255, 255, 0.85)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.08)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                              <div>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                  {isQueryTamil ? 'செயற்கை நுண்ணறிவு பரிந்துரை' : 'AI Recommendation'}
+                                </span>
+                                <h4 style={{ 
+                                  margin: '0.25rem 0 0 0', 
+                                  fontSize: '1.6rem', 
+                                  fontWeight: 800, 
+                                  color: advisorResult.verdict === 'Recommended' ? '#166534' : advisorResult.verdict === 'Proceed with Caution' ? '#b45309' : '#b91c1c',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.5rem'
+                                }}>
+                                  {advisorResult.verdict === 'Recommended' && <CheckCircle size={24} color="#166534" />}
+                                  {advisorResult.verdict === 'Proceed with Caution' && <ShieldAlert size={24} color="#b45309" />}
+                                  {advisorResult.verdict === 'Not Recommended' && <AlertCircle size={24} color="#b91c1c" />}
+                                  {isQueryTamil ? (advisorResult.verdict === 'Recommended' ? 'பரிந்துரைக்கப்படுகிறது' : advisorResult.verdict === 'Proceed with Caution' ? 'எச்சரிக்கையுடன் தொடரவும்' : 'பரிந்துரைக்கப்படவில்லை') : advisorResult.verdict}
+                                </h4>
+                              </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            {/* Read Aloud Text-to-Speech Button */}
-                            <button
-                              type="button"
-                              onClick={speakRecommendation}
-                              style={{
-                                background: isSpeaking ? '#e0e7ff' : '#ffffff',
-                                border: '1px solid #c7d2fe',
-                                color: '#4338ca',
-                                borderRadius: '12px',
-                                padding: '0.4rem 0.75rem',
-                                fontSize: '0.75rem',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.35rem',
-                                boxShadow: '0 2px 6px rgba(99, 102, 241, 0.08)'
-                              }}
-                              title="Listen to recommendation out loud (Text-to-Speech)"
-                            >
-                              {isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                              <span>{isSpeaking ? 'Stop' : 'Listen'}</span>
-                            </button>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                {/* Read Aloud Text-to-Speech Button */}
+                                <button
+                                  type="button"
+                                  onClick={speakRecommendation}
+                                  style={{
+                                    background: isSpeaking ? '#e0e7ff' : '#ffffff',
+                                    border: '1px solid #c7d2fe',
+                                    color: '#4338ca',
+                                    borderRadius: '12px',
+                                    padding: '0.4rem 0.75rem',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.35rem',
+                                    boxShadow: '0 2px 6px rgba(99, 102, 241, 0.08)'
+                                  }}
+                                  title="Listen to recommendation out loud (Text-to-Speech)"
+                                >
+                                  {isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                                  <span>{isSpeaking ? (isQueryTamil ? 'நிறுத்து' : 'Stop') : (isQueryTamil ? 'கேட்க' : 'Listen')}</span>
+                                </button>
 
-                            <span style={{ 
-                              padding: '0.35rem 0.85rem', 
-                              borderRadius: '20px', 
-                              fontSize: '0.75rem', 
-                              fontWeight: 800,
-                              background: advisorResult.risk_level === 'Low' ? '#dcfce7' : advisorResult.risk_level === 'Medium' ? '#fef3c7' : '#fee2e2',
-                              color: advisorResult.risk_level === 'Low' ? '#166534' : advisorResult.risk_level === 'Medium' ? '#b45309' : '#b91c1c',
-                              border: `1px solid ${advisorResult.risk_level === 'Low' ? '#bbf7d0' : advisorResult.risk_level === 'Medium' ? '#fde68a' : '#fca5a5'}`
-                            }}>
-                              {advisorResult.risk_level} Risk Profile
-                            </span>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', padding: '1rem', background: 'rgba(255, 255, 255, 0.65)', borderRadius: '14px', marginBottom: '1rem', border: '1px solid #c7d2fe' }}>
-                          <div>
-                            <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>Current Cash Balance</div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>Rs.{advisorResult.current_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>Est. Post-Transaction Reserve</div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: advisorResult.estimated_post_balance >= 10000 ? '#166534' : '#b91c1c' }}>
-                              Rs.{advisorResult.estimated_post_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                <span style={{ 
+                                  padding: '0.35rem 0.85rem', 
+                                  borderRadius: '20px', 
+                                  fontSize: '0.75rem', 
+                                  fontWeight: 800,
+                                  background: advisorResult.risk_level === 'Low' ? '#dcfce7' : advisorResult.risk_level === 'Medium' ? '#fef3c7' : '#fee2e2',
+                                  color: advisorResult.risk_level === 'Low' ? '#166534' : advisorResult.risk_level === 'Medium' ? '#b45309' : '#b91c1c',
+                                  border: `1px solid ${advisorResult.risk_level === 'Low' ? '#bbf7d0' : advisorResult.risk_level === 'Medium' ? '#fde68a' : '#fca5a5'}`
+                                }}>
+                                  {isQueryTamil ? (advisorResult.risk_level === 'Low' ? 'குறைந்த அபாய நிலை' : advisorResult.risk_level === 'Medium' ? 'மத்திய அபாய நிலை' : 'உயர் அபாய நிலை') : `${advisorResult.risk_level} Risk Profile`}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        </div>
 
-                        {advisorResult.suggested_action && (
-                          <div style={{ fontSize: '0.85rem', color: '#0f172a', fontWeight: 600, background: '#eef2ff', padding: '0.75rem 1rem', borderRadius: '12px', borderLeft: '4px solid #4338ca', border: '1px solid #c7d2fe' }}>
-                            <strong style={{ color: '#4338ca' }}>Suggested Next Step:</strong> {advisorResult.suggested_action}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', padding: '1rem', background: 'rgba(255, 255, 255, 0.65)', borderRadius: '14px', marginBottom: '1rem', border: '1px solid #c7d2fe' }}>
+                              <div>
+                                <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>
+                                  {isQueryTamil ? 'தற்போதைய ரொக்க இருப்பு' : 'Current Cash Balance'}
+                                </div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>Rs.{advisorResult.current_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>
+                                  {isQueryTamil ? 'எதிர்பார்க்கப்படும் இருப்பு' : 'Est. Post-Transaction Reserve'}
+                                </div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: advisorResult.estimated_post_balance >= 10000 ? '#166534' : '#b91c1c' }}>
+                                  Rs.{advisorResult.estimated_post_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </div>
+                              </div>
+                            </div>
+
+                            {advisorResult.suggested_action && (
+                              <div style={{ fontSize: '0.85rem', color: '#0f172a', fontWeight: 600, background: '#eef2ff', padding: '0.75rem 1rem', borderRadius: '12px', borderLeft: '4px solid #4338ca', border: '1px solid #c7d2fe' }}>
+                                <strong style={{ color: '#4338ca' }}>
+                                  {isQueryTamil ? 'பரிந்துரைக்கப்பட்ட அடுத்த கட்ட நடவடிக்கை:' : 'Suggested Next Step:'}
+                                </strong> {advisorResult.suggested_action}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        );
+                      })()}
 
                       {/* Adaptive Blending Algorithm Card */}
                       <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '20px', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
@@ -2242,7 +2255,7 @@ function App() {
                     <div className="glass-card" style={{ padding: '2rem', borderRadius: '20px', marginBottom: '1.5rem', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
                       <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <Sparkles size={20} color="#4338ca" />
-                        Explainable Recommendation Rationale
+                        {advisorQuery && anyCharIsTamil(advisorQuery) ? 'விளக்கமளிக்கப்பட்ட பரிந்துரை காரணம்' : 'Explainable Recommendation Rationale'}
                       </h4>
                       
                       <p style={{ fontSize: '0.95rem', color: '#1e293b', fontWeight: 600, lineHeight: 1.6, marginBottom: '1.25rem' }}>
@@ -2252,7 +2265,7 @@ function App() {
                       {advisorResult.key_factors && advisorResult.key_factors.length > 0 && (
                         <div>
                           <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
-                            Key Decision Factors
+                            {advisorQuery && anyCharIsTamil(advisorQuery) ? 'முக்கிய தீர்மான காரணிகள்' : 'Key Decision Factors'}
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             {advisorResult.key_factors.map((factor, idx) => (

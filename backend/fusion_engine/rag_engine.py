@@ -147,6 +147,86 @@ def normalize_search_query(user_query, api_key=None):
 
 def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     """
+def translate_vendor_to_tamil(vendor):
+    if not vendor:
+        return "முந்தைய நிறுவனம்"
+    v_map = {
+        "Anna University Fees": "அண்ணா பல்கலைக்கழக கட்டணம்",
+        "IFET College of Engineering": "ஐ.எஃப்.ஈ.டி பொறியியல் கல்லூரி",
+        "Dell India": "டெல் கணினி நிறுவனம்",
+        "Croma Electronics": "க்ரோமா எலக்ட்ரானிக்ஸ்",
+        "HP Store": "ஹெச்பி கணினி நிறுவனம்",
+        "Apple Store": "ஆப்பிள் விற்பனையகம்",
+        "Amazon Web Services": "அமேசான் வெப் சர்வீசஸ்",
+        "Google Workspace": "கூகுள் வொர்க்ஸ்பேஸ்",
+        "Tally Solutions": "டேலி கணக்கு மென்பொருள்",
+        "Adobe Systems": "அடோப் மென்பொருள் நிறுவனம்",
+        "Canva Pro": "கேன்வா வடிவமைப்பு சேவை",
+        "Tamil Nadu Electricity Board (TNEB)": "தமிழ்நாடு மின்சார வாரியம்",
+        "Airtel Broadband": "ஏர்டெல் இணைய சேவை",
+        "Commercial Realty Trust": "வணிக கட்டிட வாடகை",
+        "Kothari & Associates (CA)": "கோத்தாரி தணிக்கை அலுவலகம்",
+        "Legal Counsel Firm": "சட்ட ஆலோசகர் கட்டணம்",
+        "HDFC Bank": "எச்டிஎஃப்சி வங்கி",
+        "Metro Cash & Carry": "மெட்ரோ மொத்த விற்பனையகம்",
+        "Meta Ads": "மெட்டா விளம்பர சேவை",
+        "Google Ads": "கூகுள் விளம்பர சேவை",
+        "Sri Lakshmi Supermarket": "ஸ்ரீ லக்ஷ்மி சூப்பர் மார்க்கெட்",
+        "Vinyl_laptops": "வினில் மடிக்கணினிகள்",
+        "AWS Cloud": "ஏபிடபிள்யூஎஸ் மேகக்கணி சேவை"
+    }
+    return v_map.get(vendor, vendor)
+
+
+def translate_category_to_tamil(cat):
+    c_map = {
+        "Education": "கல்வி",
+        "Shopping": "பொருட்கள் வாங்குதல்",
+        "Software": "மென்பொருள்",
+        "Utilities": "அத்தியாவசிய பயன்பாடுகள்",
+        "Marketing": "விளம்பரம்",
+        "Financial": "நிதி சேவை",
+        "Miscellaneous": "இதர செலவு"
+    }
+    return c_map.get(cat, cat)
+
+
+def translate_outcome_to_tamil(outcome):
+    o = str(outcome).lower()
+    if o in ["strained", "strained_balance"]:
+        return "ரொக்க நெருக்கடி நிலை"
+    if o in ["healthy", "healthy_balance"]:
+        return "ஆரோக்கியமான நிதி நிலை"
+    if o == "productive":
+        return "பயனுள்ள முதலீடு"
+    if o == "necessary":
+        return "அவசியமான செலவு"
+    if o == "wasteful":
+        return "வீண் செலவு"
+    return "ஆரோக்கியமான நிலை"
+
+
+def translate_notes_to_tamil(notes):
+    if not notes:
+        return ""
+    n_lower = notes.lower()
+    if "tuition" in n_lower or "college" in n_lower or "degree" in n_lower or "son" in n_lower:
+        return "மகன் படிப்புக்காக கல்லூரி கட்டணம் செலுத்தியதால் தற்காலிக நிதி நெருக்கடி ஏற்பட்டது"
+    if "laptop" in n_lower or "developer" in n_lower or "computer" in n_lower:
+        return "தொழில்நுட்ப பயன்பாட்டிற்காக புதிய கணினி வாங்கப்பட்டது"
+    if "electricity" in n_lower or "tneb" in n_lower:
+        return "மாதாந்திர மின்சார கட்டணம் செலுத்தப்பட்டது"
+    if "internet" in n_lower or "broadband" in n_lower:
+        return "அலுவலக இணைய சேவை கட்டணம் செலுத்தப்பட்டது"
+    if "ads" in n_lower or "campaign" in n_lower:
+        return "வாடிக்கையாளர்களை பெற விளம்பரம் செய்யப்பட்டது"
+    if "printer" in n_lower or "scanner" in n_lower:
+        return "அலுவலக ரசீது மற்றும் அச்சு இயந்திரம் வாங்கப்பட்டது"
+    return notes
+
+
+def generate_advisor_recommendation(user_query, top_k=4, language="en"):
+    """
     RAG Fusion Engine Main Entry Point:
     1. Retrieves top K similar past case memories from ChromaDB using LLM Semantic Query Rewriting
     2. Fetches live cash balance & 30-day forecast trajectory
@@ -210,7 +290,13 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     lang_instruction = ""
     if language == "ta":
         lang_instruction = (
-            "IMPORTANT LANGUAGE & TEXT-TO-SPEECH INSTRUCTION: The user query is in TAMIL / Tanglish. You MUST write your response in clean, natural TAMIL (using Tamil script) for the 'explanation', 'key_factors' array items, and 'suggested_action'. "
+            "CRITICAL 100% PURE TAMIL REQUIREMENT: The user query is in TAMIL script. The user CANNOT read a single word of English. "
+            "THEREFORE, EVERY SINGLE WORD of 'explanation', 'key_factors' array items, and 'suggested_action' MUST BE IN 100% TAMIL SCRIPT. "
+            "STRICTLY FORBIDDEN: Do NOT leave ANY English words anywhere in the text (no English category names like '[Education]', no English outcomes like 'STRAINED', no English vendor names like 'Anna University Fees', and no English note text). "
+            "TRANSLATE ALL VENDOR NAMES INTO TAMIL (e.g. 'Anna University Fees' -> 'அண்ணா பல்கலைக்கழக கட்டணம்', 'Dell India' -> 'டெல் கணினி நிறுவனம்', 'IFET College' -> 'ஐ.எஃப்.ஈ.டி கல்லூரி'), "
+            "TRANSLATE ALL CATEGORIES INTO TAMIL (e.g. Education -> 'கல்வி', Shopping -> 'பொருட்கள் வாங்குதல்', Software -> 'மென்பொருள்'), "
+            "TRANSLATE ALL OUTCOMES INTO TAMIL (e.g. STRAINED -> 'ரொக்க நெருக்கடி நிலை', HEALTHY -> 'ஆரோக்கியமான நிதி நிலை'), "
+            "AND TRANSLATE ALL HISTORICAL NOTES INTO NATURAL TAMIL SENTENCES. "
             "CRITICAL TTS FORMATTING: Do NOT use hyphens before Tamil suffixes (write '65000க்கு' or 'அறுபத்தைந்தாயிரத்துக்கு' instead of '65,000-க்கு'). Write numbers clearly without hyphens so text-to-speech engines pronounce amounts naturally without saying 'minus'. "
             "Keep 'verdict' strictly as one of ['Recommended', 'Proceed with Caution', 'Not Recommended'] and keep 'estimated_post_balance' as a number."
         )
