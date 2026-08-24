@@ -1051,53 +1051,83 @@ function App() {
                   
                   {/* Left Side: Category Spend Pie Chart */}
                   <div className="glass-card chart-card">
-                    <div className="grid-section-header" style={{ width: '100%' }}>
-                      <h3>Expense distribution by Category</h3>
+                    <div className="grid-section-header" style={{ width: '100%', marginBottom: '1rem' }}>
+                      <div style={{ textAlign: 'left' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Expense distribution by Category</h3>
+                        <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Categorized operational spend breakdown</p>
+                      </div>
+                      {stats.category_spend && stats.category_spend.length > 0 && (
+                        <span className="badge category" style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', fontWeight: 700 }}>
+                          {stats.category_spend.length} Categories
+                        </span>
+                      )}
                     </div>
 
                     {stats.category_spend && stats.category_spend.length > 0 ? (
-                      <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                        <div style={{ width: '200px', height: '200px', flexShrink: 0, overflow: 'hidden', outline: 'none' }}>
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={stats.category_spend}
-                                dataKey="value"
-                                nameKey="name"
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={80}
-                                paddingAngle={4}
-                              >
-                                {stats.category_spend.map((entry, index) => (
-                                  <Cell 
-                                    key={`cell-${index}`} 
-                                    fill={CATEGORY_COLORS[entry.name] || DEFAULT_COLOR} 
+                      (() => {
+                        const totalSpend = stats.category_spend.reduce((acc, curr) => acc + (curr.value || 0), 0);
+                        return (
+                          <div style={{ width: '100%', display: 'grid', gridTemplateColumns: '220px 1fr', gap: '2rem', alignItems: 'center' }}>
+                            
+                            {/* Donut Chart with Center Total Summary */}
+                            <div style={{ width: '220px', height: '220px', position: 'relative', flexShrink: 0, outline: 'none' }}>
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={stats.category_spend}
+                                    dataKey="value"
+                                    nameKey="name"
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={65}
+                                    outerRadius={95}
+                                    paddingAngle={4}
+                                  >
+                                    {stats.category_spend.map((entry, index) => (
+                                      <Cell 
+                                        key={`cell-${index}`} 
+                                        fill={CATEGORY_COLORS[entry.name] || DEFAULT_COLOR} 
+                                      />
+                                    ))}
+                                  </Pie>
+                                  <Tooltip 
+                                    formatter={(value) => `Rs.${value.toLocaleString()}`}
+                                    contentStyle={{ background: '#ffffff', border: '1px solid #c7d2fe', borderRadius: '12px', color: '#0f172a', boxShadow: '0 8px 24px rgba(99, 102, 241, 0.15)', fontWeight: 700 }}
                                   />
-                                ))}
-                              </Pie>
-                              <Tooltip 
-                                formatter={(value) => `Rs.${value.toLocaleString()}`}
-                                contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', color: '#fff' }}
-                              />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
+                                </PieChart>
+                              </ResponsiveContainer>
 
-                        {/* Legend list details */}
-                        <div className="custom-legend">
-                          {stats.category_spend.map((entry, idx) => (
-                            <div key={idx} className="legend-item">
-                              <div className="legend-label-group">
-                                <span className="legend-color-dot" style={{ backgroundColor: CATEGORY_COLORS[entry.name] || DEFAULT_COLOR }}></span>
-                                <span className="legend-label-name">{entry.name}</span>
+                              {/* Donut Center Display */}
+                              <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Spend</span>
+                                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', marginTop: '0.1rem' }}>Rs.{totalSpend.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                               </div>
-                              <span className="legend-value">Rs.{entry.value.toLocaleString()}</span>
                             </div>
-                          ))}
-                        </div>
-                      </div>
+
+                            {/* Rich Category Breakdown Cards List */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', width: '100%' }}>
+                              {stats.category_spend.map((entry, idx) => {
+                                const percentage = totalSpend > 0 ? ((entry.value / totalSpend) * 100).toFixed(1) : 0;
+                                return (
+                                  <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.95rem', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe', boxShadow: '0 2px 8px rgba(99, 102, 241, 0.05)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                      <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: CATEGORY_COLORS[entry.name] || DEFAULT_COLOR, flexShrink: 0, boxShadow: `0 0 8px ${CATEGORY_COLORS[entry.name] || DEFAULT_COLOR}` }}></span>
+                                      <div style={{ textAlign: 'left' }}>
+                                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.88rem' }}>{entry.name}</div>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>{percentage}% of total</div>
+                                      </div>
+                                    </div>
+                                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>
+                                      Rs.{entry.value.toLocaleString()}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                          </div>
+                        );
+                      })()
                     ) : (
                       <div className="empty-state" style={{ height: '200px' }}>
                         <AlertCircle size={24} />
