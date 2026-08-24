@@ -505,13 +505,22 @@ def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, b
         v_cat = c0.get('category', c0.get('metadata', {}).get('category', ''))
         v_notes = c0.get('notes', c0.get('metadata', {}).get('notes', ''))
 
-        cat_str = f" [{v_cat}]" if v_cat else ""
-        note_str = f" — '{v_notes}'" if v_notes else ""
+        # English versions
+        cat_str_en = f" [{v_cat}]" if v_cat else ""
+        note_str_en = f" — '{v_notes}'" if v_notes else ""
+        top_case_text_en = f"Comparing this proposal with past {v_name}{cat_str_en} transaction of Rs. {v_amt:,.2f} (Outcome: {v_out}{note_str_en}), "
+        top_case_factor_en = f"Similar past case comparison: {v_name}{cat_str_en} - Rs. {v_amt:,.2f} (Historical Outcome: {v_out})"
 
-        top_case_text_ta = f"முன்பு {v_name}{cat_str} நிறுவனத்தில் ரூ. {v_amt:,.2f} செலவிடப்பட்ட போது பெறப்பட்ட அனுபவத்துடன் (நிலை: {v_out}{note_str}) ஒப்பிடுகையில், "
-        top_case_text_en = f"Comparing this proposal with past {v_name}{cat_str} transaction of Rs. {v_amt:,.2f} (Outcome: {v_out}{note_str}), "
-        top_case_factor_ta = f"ஒத்த முந்தைய நிகழ்வு ஒப்பீடு: {v_name}{cat_str} - ரூ. {v_amt:,.2f} (நிலை: {v_out})"
-        top_case_factor_en = f"Similar past case comparison: {v_name}{cat_str} - Rs. {v_amt:,.2f} (Historical Outcome: {v_out})"
+        # 100% Pure Tamil versions (Zero English words)
+        v_ta = translate_vendor_to_tamil(v_name)
+        c_ta = translate_category_to_tamil(v_cat)
+        o_ta = translate_outcome_to_tamil(v_out)
+        n_ta = translate_notes_to_tamil(v_notes)
+
+        cat_str_ta = f" [{c_ta}]" if c_ta else ""
+        note_str_ta = f" — '{n_ta}'" if n_ta else ""
+        top_case_text_ta = f"முன்பு {v_ta}{cat_str_ta} நிறுவனத்தில் ரூ. {v_amt:,.2f} செலவிடப்பட்ட போது பெறப்பட்ட அனுபவத்துடன் (நிலை: {o_ta}{note_str_ta}) ஒப்பிடுகையில், "
+        top_case_factor_ta = f"ஒத்த முந்தைய நிகழ்வு ஒப்பீடு: {v_ta}{cat_str_ta} - ரூ. {v_amt:,.2f} (நிலை: {o_ta})"
 
     # Check for personal / education keyword context
     is_personal_education = any(w in user_query.lower() for w in ['college', 'fees', 'tuition', 'son', 'school', 'education', 'காலேஜ்', 'ஃபீஸ்'])
