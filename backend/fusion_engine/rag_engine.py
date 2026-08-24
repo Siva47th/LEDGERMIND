@@ -245,10 +245,13 @@ PAST CASE MEMORY (Retrieved via Cosine Similarity from ChromaDB):
 ADAPTIVE BLENDING WEIGHT: {blend_weight:.2f} (1.00 means high historical grounding; 0.00 means generic rules).
 
 CRITICAL GROUNDING INSTRUCTIONS:
-When PAST CASE MEMORY contains similar past transactions (e.g. past college fee payments, equipment purchases, or marketing expenses):
-1. YOU MUST EXPLICITLY CITE WHAT HAPPENED LAST TIME in your 'explanation' and 'key_factors'. Mention the specific past vendor/case (e.g. IFET College of Engineering, Anna University) and its historical outcome ('strained' or 'healthy').
-2. Explain what lesson was learned from that past expenditure (e.g. 'Last time paying Rs. 50,000 for college fees temporarily strained liquid reserves for 3 weeks...').
-3. Combine that historical lesson with your live balance and 30-day forecast to provide a grounded recommendation.
+Retrieved Past Case Memories from ChromaDB vector memory are provided above. YOU MUST ALWAYS EXPLICITLY CITE AND COMPARE THE USER PROPOSAL AGAINST THESE RETRIEVED PAST CASES in both your 'explanation' and 'key_factors':
+1. Identify the most relevant past case from the retrieved list (e.g. Croma Electronics, Dell India, HP Store, IFET College, etc.).
+2. EXPLICITLY MENTION THE PAST VENDOR NAME, PAST AMOUNT, AND HISTORICAL OUTCOME STATE (HEALTHY / STRAINED) in your 'explanation' and 'key_factors'.
+   - In Tamil responses, explicitly cite the past case name and outcome (e.g., 'முன்பு Croma Electronics நிறுவனத்தில் ரூ. 28,000 செலவிட்ட போது பெறப்பட்ட அனுபவத்தின் அடிப்படையில்...').
+   - In English responses, cite the exact past case (e.g., 'Comparing this with past Croma Electronics expense of Rs. 28,000 which resulted in a HEALTHY state...').
+3. Explain what lesson was learned from that past expenditure and why it supports or warns against the current proposal.
+4. Combine that historical case comparison with your live balance and 30-day forecast trajectory to form your final verdict.
 
 {lang_instruction}
 
@@ -256,8 +259,8 @@ INSTRUCTIONS:
 Analyze the user proposal and respond in STRICT JSON format with EXACTLY these keys:
 {{
   "verdict": "Recommended" | "Proceed with Caution" | "Not Recommended",
-  "explanation": "Detailed 2-3 sentence explanation explaining the reasoning, explicitly referencing what happened in past similar case memories and live balance.",
-  "key_factors": ["Point 1 ( citing past case outcome)", "Point 2 (live balance check)", "Point 3 (forecast trajectory)"],
+  "explanation": "Detailed 2-3 sentence explanation explaining the reasoning, explicitly referencing the past vendor/case memory, historical outcome, and live balance.",
+  "key_factors": ["Point 1 (explicitly citing past case vendor name and historical outcome)", "Point 2 (live balance check)", "Point 3 (forecast trajectory)"],
   "estimated_post_balance": <numeric float estimate of cash balance if spent>,
   "risk_level": "Low" | "Medium" | "High",
   "suggested_action": "Actionable next step advice for the business owner"
