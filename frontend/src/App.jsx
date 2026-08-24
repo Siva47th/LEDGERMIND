@@ -1897,27 +1897,27 @@ function App() {
             {activeTab === 'advisor' && (
               <div className="tab-content fade-in">
                 {/* Advisor Hero Query Box */}
-                <div className="glass-card" style={{ padding: '2rem', marginBottom: '2rem', background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.5))', borderRadius: '20px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+                <div className="glass-card" style={{ padding: '2rem', marginBottom: '2rem', background: 'rgba(255, 255, 255, 0.75)', borderRadius: '20px', border: '1px solid rgba(255, 255, 255, 0.9)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.1)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                       <div style={{ padding: '0.5rem', background: 'linear-gradient(135deg, #6366f1, #3b82f6)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
                         <BrainCircuit size={24} />
                       </div>
                       <div>
-                        <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#fff' }}>RAG Fusion Financial Advisor</h3>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#94a3b8' }}>Propose spending or revenue decisions to analyze against live cash reserves, 30-day forecasting models, and ChromaDB past case memories.</p>
+                        <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>RAG Fusion Financial Advisor</h3>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Propose spending or revenue decisions to analyze against live cash reserves, 30-day forecasting models, and ChromaDB past case memories.</p>
                       </div>
                     </div>
 
                     {/* Language Selector Toggle */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(0,0,0,0.3)', padding: '0.3rem', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                      <Globe size={16} color="#818cf8" style={{ marginLeft: '0.4rem' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(199, 210, 254, 0.35)', padding: '0.3rem', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.7)' }}>
+                      <Globe size={16} color="#4f46e5" style={{ marginLeft: '0.4rem' }} />
                       <button
                         type="button"
                         onClick={() => setAdvisorLang('en')}
                         style={{
                           background: advisorLang === 'en' ? 'linear-gradient(135deg, #6366f1, #3b82f6)' : 'transparent',
-                          color: advisorLang === 'en' ? '#fff' : '#94a3b8',
+                          color: advisorLang === 'en' ? '#fff' : '#475569',
                           border: 'none',
                           padding: '0.35rem 0.75rem',
                           borderRadius: '10px',
@@ -1933,7 +1933,7 @@ function App() {
                         onClick={() => setAdvisorLang('ta')}
                         style={{
                           background: advisorLang === 'ta' ? 'linear-gradient(135deg, #6366f1, #3b82f6)' : 'transparent',
-                          color: advisorLang === 'ta' ? '#fff' : '#94a3b8',
+                          color: advisorLang === 'ta' ? '#fff' : '#475569',
                           border: 'none',
                           padding: '0.35rem 0.75rem',
                           borderRadius: '10px',
@@ -1956,7 +1956,7 @@ function App() {
                         placeholder={advisorLang === 'ta' ? "உதாரணம்: 5 புதிய லேப்டாப்கள் ₹75,000க்கு வாங்கலாமா?" : "e.g. Should I spend Rs. 75,000 on 5 development laptops for our engineering team?"}
                         value={advisorQuery}
                         onChange={(e) => setAdvisorQuery(e.target.value)}
-                        style={{ width: '100%', padding: '0.9rem 3.5rem 0.9rem 1.2rem', fontSize: '0.95rem', borderRadius: '14px', background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+                        style={{ width: '100%', padding: '0.9rem 3.5rem 0.9rem 1.2rem', fontSize: '0.95rem', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe', color: '#0f172a' }}
                       />
                       <button
                         type="button"
