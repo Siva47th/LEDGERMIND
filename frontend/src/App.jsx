@@ -1863,22 +1863,22 @@ function App() {
                                 const outflow = h.expense + h.recurring + h.actual_invoice;
                                 return (
                                   <tr key={index}>
-                                    <td style={{ fontWeight: 600, textAlign: 'left' }}>{h.date}</td>
+                                    <td style={{ fontWeight: 700, textAlign: 'left', color: '#0f172a' }}>{h.date}</td>
                                     <td style={{ textAlign: 'left' }}>
                                       <span style={{ 
-                                        color: h.actual_invoice > 0 ? '#818cf8' : h.recurring > 0 ? '#f472b6' : 'white',
-                                        fontWeight: h.actual_invoice > 0 ? 600 : 'normal'
+                                        color: h.actual_invoice > 0 ? '#4338ca' : h.recurring > 0 ? '#7e22ce' : '#0f172a',
+                                        fontWeight: 700
                                       }}>
                                         {h.description}
                                       </span>
                                     </td>
-                                    <td style={{ color: '#34d399', fontWeight: 600, textAlign: 'right' }}>
+                                    <td style={{ color: '#166534', fontWeight: 700, textAlign: 'right' }}>
                                       +Rs.{h.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
-                                    <td style={{ color: outflow > 0 ? '#f87171' : '#64748b', textAlign: 'right' }}>
+                                    <td style={{ color: outflow > 0 ? '#b91c1c' : '#475569', fontWeight: outflow > 0 ? 700 : 500, textAlign: 'right' }}>
                                       {outflow > 0 ? `-Rs.${outflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'Rs.0.00'}
                                     </td>
-                                    <td style={{ fontWeight: 700, textAlign: 'right' }}>
+                                    <td style={{ fontWeight: 800, textAlign: 'right', color: '#0f172a' }}>
                                       Rs.{h.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                   </tr>
@@ -2003,8 +2003,8 @@ function App() {
 
                   {/* Sample Query Suggestions */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '1rem', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <Lightbulb size={14} color="#f59e0b" /> Sample Queries:
+                    <span style={{ fontSize: '0.75rem', color: '#334155', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <Lightbulb size={14} color="#d97706" /> Sample Queries:
                     </span>
                     {[
                       'Should I buy 5 new laptops for Rs. 75,000?',
@@ -2019,14 +2019,16 @@ function App() {
                           handleAdvisorSubmit(sample);
                         }}
                         style={{
-                          background: 'rgba(255, 255, 255, 0.04)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          background: 'rgba(255, 255, 255, 0.85)',
+                          border: '1px solid #c7d2fe',
                           borderRadius: '20px',
-                          color: '#cbd5e1',
+                          color: '#1e293b',
+                          fontWeight: 600,
                           fontSize: '0.75rem',
                           padding: '0.35rem 0.75rem',
                           cursor: 'pointer',
-                          transition: 'all 0.2s ease'
+                          transition: 'all 0.2s ease',
+                          boxShadow: '0 2px 6px rgba(99, 102, 241, 0.05)'
                         }}
                       >
                         {sample}
@@ -2050,22 +2052,22 @@ function App() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
                       
                       {/* Verdict Banner Card */}
-                      <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '20px', border: `1px solid ${advisorResult.verdict === 'Recommended' ? '#34d399' : advisorResult.verdict === 'Proceed with Caution' ? '#fbbf24' : '#ef4444'}`, background: 'rgba(15, 23, 42, 0.65)' }}>
+                      <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '20px', border: `1px solid ${advisorResult.verdict === 'Recommended' ? '#bbf7d0' : advisorResult.verdict === 'Proceed with Caution' ? '#fde68a' : '#fca5a5'}`, background: 'rgba(255, 255, 255, 0.85)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.08)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                           <div>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Recommendation</span>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Recommendation</span>
                             <h4 style={{ 
                               margin: '0.25rem 0 0 0', 
                               fontSize: '1.6rem', 
                               fontWeight: 800, 
-                              color: advisorResult.verdict === 'Recommended' ? '#34d399' : advisorResult.verdict === 'Proceed with Caution' ? '#fbbf24' : '#ef4444',
+                              color: advisorResult.verdict === 'Recommended' ? '#166534' : advisorResult.verdict === 'Proceed with Caution' ? '#b45309' : '#b91c1c',
                               display: 'flex',
                               alignItems: 'center',
                               gap: '0.5rem'
                             }}>
-                              {advisorResult.verdict === 'Recommended' && <CheckCircle size={24} />}
-                              {advisorResult.verdict === 'Proceed with Caution' && <ShieldAlert size={24} />}
-                              {advisorResult.verdict === 'Not Recommended' && <AlertCircle size={24} />}
+                              {advisorResult.verdict === 'Recommended' && <CheckCircle size={24} color="#166534" />}
+                              {advisorResult.verdict === 'Proceed with Caution' && <ShieldAlert size={24} color="#b45309" />}
+                              {advisorResult.verdict === 'Not Recommended' && <AlertCircle size={24} color="#b91c1c" />}
                               {advisorResult.verdict}
                             </h4>
                           </div>
@@ -2076,9 +2078,9 @@ function App() {
                               type="button"
                               onClick={speakRecommendation}
                               style={{
-                                background: isSpeaking ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255,255,255,0.06)',
-                                border: '1px solid rgba(99, 102, 241, 0.3)',
-                                color: '#818cf8',
+                                background: isSpeaking ? '#e0e7ff' : '#ffffff',
+                                border: '1px solid #c7d2fe',
+                                color: '#4338ca',
                                 borderRadius: '12px',
                                 padding: '0.4rem 0.75rem',
                                 fontSize: '0.75rem',
@@ -2086,7 +2088,8 @@ function App() {
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '0.35rem'
+                                gap: '0.35rem',
+                                boxShadow: '0 2px 6px rgba(99, 102, 241, 0.08)'
                               }}
                               title="Listen to recommendation out loud (Text-to-Speech)"
                             >
@@ -2098,91 +2101,91 @@ function App() {
                               padding: '0.35rem 0.85rem', 
                               borderRadius: '20px', 
                               fontSize: '0.75rem', 
-                              fontWeight: 700,
-                              background: advisorResult.risk_level === 'Low' ? 'rgba(52, 211, 153, 0.15)' : advisorResult.risk_level === 'Medium' ? 'rgba(251, 191, 36, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                              color: advisorResult.risk_level === 'Low' ? '#34d399' : advisorResult.risk_level === 'Medium' ? '#fbbf24' : '#ef4444',
-                              border: `1px solid ${advisorResult.risk_level === 'Low' ? '#34d399' : advisorResult.risk_level === 'Medium' ? '#fbbf24' : '#ef4444'}`
+                              fontWeight: 800,
+                              background: advisorResult.risk_level === 'Low' ? '#dcfce7' : advisorResult.risk_level === 'Medium' ? '#fef3c7' : '#fee2e2',
+                              color: advisorResult.risk_level === 'Low' ? '#166534' : advisorResult.risk_level === 'Medium' ? '#b45309' : '#b91c1c',
+                              border: `1px solid ${advisorResult.risk_level === 'Low' ? '#bbf7d0' : advisorResult.risk_level === 'Medium' ? '#fde68a' : '#fca5a5'}`
                             }}>
                               {advisorResult.risk_level} Risk Profile
                             </span>
                           </div>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', padding: '1rem', background: 'rgba(0,0,0,0.25)', borderRadius: '14px', marginBottom: '1rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', padding: '1rem', background: 'rgba(255, 255, 255, 0.65)', borderRadius: '14px', marginBottom: '1rem', border: '1px solid #c7d2fe' }}>
                           <div>
-                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Current Cash Balance</div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>Rs.{advisorResult.current_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>Current Cash Balance</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>Rs.{advisorResult.current_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                           </div>
                           <div>
-                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Est. Post-Transaction Reserve</div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: advisorResult.estimated_post_balance >= 10000 ? '#34d399' : '#ef4444' }}>
+                            <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>Est. Post-Transaction Reserve</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: advisorResult.estimated_post_balance >= 10000 ? '#166534' : '#b91c1c' }}>
                               Rs.{advisorResult.estimated_post_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </div>
                           </div>
                         </div>
 
                         {advisorResult.suggested_action && (
-                          <div style={{ fontSize: '0.85rem', color: '#cbd5e1', background: 'rgba(99, 102, 241, 0.08)', padding: '0.75rem 1rem', borderRadius: '12px', borderLeft: '3px solid #6366f1' }}>
-                            <strong>Suggested Next Step:</strong> {advisorResult.suggested_action}
+                          <div style={{ fontSize: '0.85rem', color: '#0f172a', fontWeight: 600, background: '#eef2ff', padding: '0.75rem 1rem', borderRadius: '12px', borderLeft: '4px solid #4338ca', border: '1px solid #c7d2fe' }}>
+                            <strong style={{ color: '#4338ca' }}>Suggested Next Step:</strong> {advisorResult.suggested_action}
                           </div>
                         )}
                       </div>
 
                       {/* Adaptive Blending Algorithm Card */}
-                      <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '20px', background: 'rgba(15, 23, 42, 0.65)' }}>
+                      <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '20px', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                          <Bot size={20} color="#818cf8" />
-                          <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#fff' }}>Adaptive Blending Calibration</h4>
+                          <Bot size={20} color="#4338ca" />
+                          <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Adaptive Blending Calibration</h4>
                         </div>
                         
-                        <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '1rem', lineHeight: 1.4 }}>
+                        <p style={{ fontSize: '0.8rem', color: '#475569', fontWeight: 600, marginBottom: '1rem', lineHeight: 1.4 }}>
                           FinSense dynamically balances vector case memory vs. baseline financial rules based on case history volume.
                         </p>
 
                         <div style={{ marginBottom: '1.25rem' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 700, color: '#fff', marginBottom: '0.4rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.4rem' }}>
                             <span>Case Memory Weight ({Math.round(advisorResult.blend_weight * 100)}%)</span>
                             <span>Rule Baseline ({Math.round((1 - advisorResult.blend_weight) * 100)}%)</span>
                           </div>
-                          <div style={{ height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '10px', overflow: 'hidden', display: 'flex' }}>
-                            <div style={{ width: `${advisorResult.blend_weight * 100}%`, background: 'linear-gradient(90deg, #6366f1, #818cf8)', transition: 'width 0.5s ease' }}></div>
-                            <div style={{ width: `${(1 - advisorResult.blend_weight) * 100}%`, background: 'rgba(255,255,255,0.15)' }}></div>
+                          <div style={{ height: '10px', background: '#e0e7ff', borderRadius: '10px', overflow: 'hidden', display: 'flex' }}>
+                            <div style={{ width: `${advisorResult.blend_weight * 100}%`, background: 'linear-gradient(90deg, #4338ca, #3b82f6)', transition: 'width 0.5s ease' }}></div>
+                            <div style={{ width: `${(1 - advisorResult.blend_weight) * 100}%`, background: '#cbd5e1' }}></div>
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: '#cbd5e1' }}>
-                          <div style={{ flex: 1, padding: '0.6rem', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', textAlign: 'center' }}>
-                            <div style={{ color: '#818cf8', fontWeight: 700, fontSize: '0.95rem' }}>{advisorResult.retrieved_cases?.length || 0}</div>
-                            <div style={{ color: '#64748b' }}>Retrieved Cases</div>
+                        <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: '#0f172a' }}>
+                          <div style={{ flex: 1, padding: '0.6rem', background: 'rgba(255,255,255,0.65)', border: '1px solid #c7d2fe', borderRadius: '10px', textAlign: 'center' }}>
+                            <div style={{ color: '#4338ca', fontWeight: 800, fontSize: '0.95rem' }}>{advisorResult.retrieved_cases?.length || 0}</div>
+                            <div style={{ color: '#475569', fontWeight: 700 }}>Retrieved Cases</div>
                           </div>
-                          <div style={{ flex: 1, padding: '0.6rem', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', textAlign: 'center' }}>
-                            <div style={{ color: '#34d399', fontWeight: 700, fontSize: '0.95rem' }}>ChromaDB</div>
-                            <div style={{ color: '#64748b' }}>Vector Index</div>
+                          <div style={{ flex: 1, padding: '0.6rem', background: 'rgba(255,255,255,0.65)', border: '1px solid #c7d2fe', borderRadius: '10px', textAlign: 'center' }}>
+                            <div style={{ color: '#166534', fontWeight: 800, fontSize: '0.95rem' }}>ChromaDB</div>
+                            <div style={{ color: '#475569', fontWeight: 700 }}>Vector Index</div>
                           </div>
                         </div>
                       </div>
                     </div>
 
                     {/* Middle Row: Explainable LLM Reasoning & Key Rationale */}
-                    <div className="glass-card" style={{ padding: '2rem', borderRadius: '20px', marginBottom: '1.5rem', background: 'rgba(15, 23, 42, 0.65)' }}>
-                      <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Sparkles size={20} color="#6366f1" />
+                    <div className="glass-card" style={{ padding: '2rem', borderRadius: '20px', marginBottom: '1.5rem', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
+                      <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Sparkles size={20} color="#4338ca" />
                         Explainable Recommendation Rationale
                       </h4>
                       
-                      <p style={{ fontSize: '0.95rem', color: '#e2e8f0', lineHeight: 1.6, marginBottom: '1.25rem' }}>
+                      <p style={{ fontSize: '0.95rem', color: '#1e293b', fontWeight: 600, lineHeight: 1.6, marginBottom: '1.25rem' }}>
                         {advisorResult.explanation}
                       </p>
 
                       {advisorResult.key_factors && advisorResult.key_factors.length > 0 && (
                         <div>
-                          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
                             Key Decision Factors
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             {advisorResult.key_factors.map((factor, idx) => (
-                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem', color: '#cbd5e1', background: 'rgba(255,255,255,0.02)', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.04)' }}>
-                                <CheckCircle size={16} color="#34d399" />
+                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem', color: '#0f172a', fontWeight: 600, background: 'rgba(255,255,255,0.65)', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #c7d2fe' }}>
+                                <CheckCircle size={16} color="#166534" />
                                 <span>{factor}</span>
                               </div>
                             ))}
@@ -2192,50 +2195,51 @@ function App() {
                     </div>
 
                     {/* Bottom Row: Retrieved Vector Case Memories from ChromaDB */}
-                    <div className="glass-card" style={{ padding: '2rem', borderRadius: '20px', background: 'rgba(15, 23, 42, 0.65)' }}>
+                    <div className="glass-card" style={{ padding: '2rem', borderRadius: '20px', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                        <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <Tag size={20} color="#818cf8" />
+                        <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Tag size={20} color="#4338ca" />
                           Retrieved Case Memories (Cosine Similarity)
                         </h4>
-                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Matched from 60+ Indexed Small Business Transactions</span>
+                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600 }}>Matched from 60+ Indexed Small Business Transactions</span>
                       </div>
 
                       {advisorResult.retrieved_cases && advisorResult.retrieved_cases.length > 0 ? (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
                           {advisorResult.retrieved_cases.map((c, idx) => (
-                            <div key={idx} style={{ padding: '1rem 1.2rem', borderRadius: '14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div key={idx} style={{ padding: '1rem 1.2rem', borderRadius: '14px', background: 'rgba(255,255,255,0.65)', border: '1px solid #c7d2fe' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                                <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.9rem' }}>{c.vendor_or_client}</span>
+                                <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{c.vendor_or_client}</span>
                                 <span style={{ 
                                   fontSize: '0.7rem', 
-                                  fontWeight: 700, 
+                                  fontWeight: 800, 
                                   padding: '0.2rem 0.5rem', 
                                   borderRadius: '12px',
-                                  background: c.outcome === 'healthy' ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                                  color: c.outcome === 'healthy' ? '#34d399' : '#ef4444'
+                                  background: c.outcome === 'healthy' ? '#dcfce7' : '#fee2e2',
+                                  color: c.outcome === 'healthy' ? '#166534' : '#b91c1c',
+                                  border: `1px solid ${c.outcome === 'healthy' ? '#bbf7d0' : '#fca5a5'}`
                                 }}>
                                   {c.outcome}
                                 </span>
                               </div>
 
-                              <div style={{ fontSize: '1rem', fontWeight: 800, color: c.transaction_type === 'income' || c.transaction_type === 'return_in' ? '#34d399' : '#f87171', marginBottom: '0.4rem' }}>
+                              <div style={{ fontSize: '1rem', fontWeight: 800, color: c.transaction_type === 'income' || c.transaction_type === 'return_in' ? '#166534' : '#b91c1c', marginBottom: '0.4rem' }}>
                                 {c.transaction_type === 'income' || c.transaction_type === 'return_in' ? '+' : '-'}Rs.{c.amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </div>
 
-                              <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontStyle: 'italic', marginBottom: '0.6rem', lineHeight: 1.3 }}>
+                              <div style={{ fontSize: '0.75rem', color: '#334155', fontWeight: 600, fontStyle: 'italic', marginBottom: '0.6rem', lineHeight: 1.3 }}>
                                 "{c.notes || c.summary_text || 'Past business transaction record'}"
                               </div>
 
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: '#64748b', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '0.4rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: '#475569', fontWeight: 700, borderTop: '1px solid rgba(99, 102, 241, 0.1)', paddingTop: '0.4rem' }}>
                                 <span>Category: {c.category}</span>
-                                <span style={{ color: '#818cf8', fontWeight: 600 }}>Score: {c.similarity_score}%</span>
+                                <span style={{ color: '#4338ca', fontWeight: 800 }}>Score: {c.similarity_score}%</span>
                               </div>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <p style={{ color: '#64748b', fontSize: '0.85rem' }}>No similar past case memories found in ChromaDB.</p>
+                        <p style={{ color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>No similar past case memories found in ChromaDB.</p>
                       )}
                     </div>
                   </div>
@@ -2246,14 +2250,14 @@ function App() {
             {/* Case Memory Viewer Tab */}
             {activeTab === 'cases' && (
               <div className="tab-content fade-in">
-                <div className="glass-card" style={{ padding: '2rem', borderRadius: '20px', marginBottom: '1.5rem', background: 'rgba(15, 23, 42, 0.65)' }}>
+                <div className="glass-card" style={{ padding: '2rem', borderRadius: '20px', marginBottom: '1.5rem', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
                     <div>
-                      <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Database size={22} color="#818cf8" />
+                      <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Database size={22} color="#4338ca" />
                         ChromaDB Vector Store Explorer
                       </h3>
-                      <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#94a3b8' }}>
+                      <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
                         Indexed historical case memory dataset ({casesList.length} total entries). Used by RAG fusion for semantic cosine retrieval.
                       </p>
                     </div>
@@ -2264,13 +2268,13 @@ function App() {
                       placeholder="Search cases by vendor, category, or notes..."
                       value={casesSearch}
                       onChange={(e) => setCasesSearch(e.target.value)}
-                      style={{ width: '280px', padding: '0.6rem 1rem', fontSize: '0.85rem', borderRadius: '12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff' }}
+                      style={{ width: '280px', padding: '0.6rem 1rem', fontSize: '0.85rem', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.9)', border: '1px solid #c7d2fe', color: '#0f172a' }}
                     />
                   </div>
 
                   {casesLoading ? (
-                    <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
-                      <RefreshCw size={24} className="spin" style={{ marginBottom: '0.5rem' }} />
+                    <div style={{ padding: '3rem', textAlign: 'center', color: '#475569', fontWeight: 600 }}>
+                      <RefreshCw size={24} className="spin" style={{ marginBottom: '0.5rem', color: '#4338ca' }} />
                       <div>Loading ChromaDB vector case memories...</div>
                     </div>
                   ) : (
@@ -2278,34 +2282,35 @@ function App() {
                       {casesList
                         .filter(c => !casesSearch || (c.vendor_or_client + ' ' + c.category + ' ' + c.notes).toLowerCase().includes(casesSearch.toLowerCase()))
                         .map((c, idx) => (
-                          <div key={idx} style={{ padding: '1.2rem', borderRadius: '16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                          <div key={idx} style={{ padding: '1.2rem', borderRadius: '16px', background: 'rgba(255, 255, 255, 0.65)', border: '1px solid #c7d2fe', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                             <div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                                <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>{c.vendor_or_client}</span>
+                                <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>{c.vendor_or_client}</span>
                                 <span style={{ 
                                   fontSize: '0.7rem', 
-                                  fontWeight: 700, 
+                                  fontWeight: 800, 
                                   padding: '0.25rem 0.6rem', 
                                   borderRadius: '12px',
-                                  background: c.outcome === 'healthy' ? 'rgba(52, 211, 153, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                                  color: c.outcome === 'healthy' ? '#34d399' : '#ef4444'
+                                  background: c.outcome === 'healthy' ? '#dcfce7' : '#fee2e2',
+                                  color: c.outcome === 'healthy' ? '#166534' : '#b91c1c',
+                                  border: `1px solid ${c.outcome === 'healthy' ? '#bbf7d0' : '#fca5a5'}`
                                 }}>
                                   {c.outcome}
                                 </span>
                               </div>
 
-                              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: c.transaction_type === 'income' || c.transaction_type === 'return_in' ? '#34d399' : '#f87171', marginBottom: '0.5rem' }}>
+                              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: c.transaction_type === 'income' || c.transaction_type === 'return_in' ? '#166534' : '#b91c1c', marginBottom: '0.5rem' }}>
                                 {c.transaction_type === 'income' || c.transaction_type === 'return_in' ? '+' : '-'}Rs.{c.amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </div>
 
-                              <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: '0 0 0.8rem 0', lineHeight: 1.4 }}>
+                              <p style={{ fontSize: '0.8rem', color: '#334155', fontWeight: 600, margin: '0 0 0.8rem 0', lineHeight: 1.4 }}>
                                 {c.notes || c.summary_text || 'Past business transaction decision memory'}
                               </p>
                             </div>
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#64748b', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '0.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#475569', fontWeight: 700, borderTop: '1px solid rgba(99, 102, 241, 0.1)', paddingTop: '0.5rem' }}>
                               <span>Category: {c.category}</span>
-                              <span style={{ color: '#818cf8', fontWeight: 600 }}>Case #{c.id}</span>
+                              <span style={{ color: '#4338ca', fontWeight: 800 }}>Case #{c.id}</span>
                             </div>
                           </div>
                         ))}
@@ -2318,18 +2323,18 @@ function App() {
             {/* System Settings Tab */}
             {activeTab === 'settings' && (
               <div className="tab-content fade-in">
-                <div className="glass-card" style={{ padding: '2rem', maxWidth: '650px', margin: '0 auto', borderRadius: '20px', background: 'rgba(15, 23, 42, 0.75)' }}>
-                  <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Sliders size={22} color="#6366f1" />
+                <div className="glass-card" style={{ padding: '2rem', maxWidth: '650px', margin: '0 auto', borderRadius: '20px', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
+                  <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Sliders size={22} color="#4338ca" />
                     System & Business Configuration
                   </h3>
-                  <p style={{ margin: '0 0 1.75rem 0', fontSize: '0.85rem', color: '#94a3b8' }}>
+                  <p style={{ margin: '0 0 1.75rem 0', fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
                     Manage baseline liquidity settings, safety threshold alerts, and LLM reasoning models.
                   </p>
 
                   <form onSubmit={handleSettingsSave} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '0.4rem' }}>
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.4rem' }}>
                         Starting Business Cash Balance (Rs.)
                       </label>
                       <input 
@@ -2338,15 +2343,15 @@ function App() {
                         className="search-input"
                         value={settingsForm.starting_balance}
                         onChange={(e) => setSettingsForm(prev => ({ ...prev, starting_balance: parseFloat(e.target.value) || 0 }))}
-                        style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+                        style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a' }}
                       />
-                      <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem', display: 'block' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600, marginTop: '0.2rem', display: 'block' }}>
                         Live balance is calculated as: Starting Balance + Σ(Income) - Σ(Expenses).
                       </span>
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '0.4rem' }}>
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.4rem' }}>
                         Financial Safety Alert Threshold (Rs.)
                       </label>
                       <input 
@@ -2355,28 +2360,28 @@ function App() {
                         className="search-input"
                         value={settingsForm.balance_alert_threshold}
                         onChange={(e) => setSettingsForm(prev => ({ ...prev, balance_alert_threshold: parseFloat(e.target.value) || 0 }))}
-                        style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+                        style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a' }}
                       />
-                      <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem', display: 'block' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600, marginTop: '0.2rem', display: 'block' }}>
                         Triggers "Strained" risk warnings when cash reserve drops below this amount.
                       </span>
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '0.4rem' }}>
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.4rem' }}>
                         Preferred Gemini AI Reasoning Model
                       </label>
                       <select
                         className="search-input"
                         value={settingsForm.gemini_model}
                         onChange={(e) => setSettingsForm(prev => ({ ...prev, gemini_model: e.target.value }))}
-                        style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', background: 'rgba(15,23,42,0.9)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }}
+                        style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a' }}
                       >
-                        <option value="gemini-3.5-flash">Gemini 3.5 Flash (Recommended - Latest & Fast)</option>
-                        <option value="gemini-2.5-pro">Gemini 2.5 Pro (Deep Complex Reasoning)</option>
-                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (Standard Baseline)</option>
+                        <option value="gemini-3.5-flash" style={{ background: '#ffffff', color: '#0f172a' }}>Gemini 3.5 Flash (Recommended - Latest & Fast)</option>
+                        <option value="gemini-2.5-pro" style={{ background: '#ffffff', color: '#0f172a' }}>Gemini 2.5 Pro (Deep Complex Reasoning)</option>
+                        <option value="gemini-2.5-flash" style={{ background: '#ffffff', color: '#0f172a' }}>Gemini 2.5 Flash (Standard Baseline)</option>
                       </select>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem', display: 'block' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600, marginTop: '0.2rem', display: 'block' }}>
                         Used by RAG Fusion engine for generating explainable advice.
                       </span>
                     </div>
@@ -2385,7 +2390,7 @@ function App() {
                       type="submit"
                       className="filter-pill active"
                       disabled={settingsSaving}
-                      style={{ padding: '0.85rem 1.5rem', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', marginTop: '0.5rem', background: 'linear-gradient(135deg, #6366f1, #3b82f6)' }}
+                      style={{ padding: '0.85rem 1.5rem', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', marginTop: '0.5rem', background: 'linear-gradient(135deg, #6366f1, #3b82f6)', color: '#ffffff' }}
                     >
                       {settingsSaving ? 'Saving Settings...' : 'Save System Settings'}
                     </button>
