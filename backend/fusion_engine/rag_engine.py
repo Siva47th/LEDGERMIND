@@ -290,13 +290,13 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     lang_instruction = ""
     if language == "ta":
         lang_instruction = (
-            "CRITICAL 100% PURE TAMIL REQUIREMENT: The user query is in TAMIL script. The user CANNOT read a single word of English. "
-            "THEREFORE, EVERY SINGLE WORD of 'explanation', 'key_factors' array items, and 'suggested_action' MUST BE IN 100% TAMIL SCRIPT. "
-            "STRICTLY FORBIDDEN: Do NOT leave ANY English words anywhere in the text (no English category names like '[Education]', no English outcomes like 'STRAINED', no English vendor names like 'Anna University Fees', and no English note text). "
-            "TRANSLATE ALL VENDOR NAMES INTO TAMIL (e.g. 'Anna University Fees' -> 'அண்ணா பல்கலைக்கழக கட்டணம்', 'Dell India' -> 'டெல் கணினி நிறுவனம்', 'IFET College' -> 'ஐ.எஃப்.ஈ.டி கல்லூரி'), "
-            "TRANSLATE ALL CATEGORIES INTO TAMIL (e.g. Education -> 'கல்வி', Shopping -> 'பொருட்கள் வாங்குதல்', Software -> 'மென்பொருள்'), "
-            "TRANSLATE ALL OUTCOMES INTO TAMIL (e.g. STRAINED -> 'ரொக்க நெருக்கடி நிலை', HEALTHY -> 'ஆரோக்கியமான நிதி நிலை'), "
-            "AND TRANSLATE ALL HISTORICAL NOTES INTO NATURAL TAMIL SENTENCES. "
+            "CRITICAL NAMING FORMAT INSTRUCTION: The user query is in TAMIL script. "
+            "Write your response in natural TAMIL script for 'explanation', 'key_factors' array items, and 'suggested_action'. "
+            "IMPORTANT FOR NAMING WORDS (Vendors, Brands, Entities, Categories, Outcomes): Keep the original English naming word as is and PUT ITS TAMIL TRANSLATION IN BRACKETS right after it. "
+            "Examples: "
+            "- Vendor Naming: 'Anna University Fees (அண்ணா பல்கலைக்கழக கட்டணம்)', 'Dell India (டெல் கணினி நிறுவனம்)', 'Croma Electronics (க்ரோமா எலக்ட்ரானிக்ஸ்)' "
+            "- Category Naming: '[Education (கல்வி)]', '[Shopping (பொருட்கள் வாங்குதல்)]', '[Software (மென்பொருள்)]' "
+            "- Outcome Naming: 'STRAINED (ரொக்க நெருக்கடி நிலை)', 'HEALTHY (ஆரோக்கியமான நிதி நிலை)' "
             "CRITICAL TTS FORMATTING: Do NOT use hyphens before Tamil suffixes (write '65000க்கு' or 'அறுபத்தைந்தாயிரத்துக்கு' instead of '65,000-க்கு'). Write numbers clearly without hyphens so text-to-speech engines pronounce amounts naturally without saying 'minus'. "
             "Keep 'verdict' strictly as one of ['Recommended', 'Proceed with Caution', 'Not Recommended'] and keep 'estimated_post_balance' as a number."
         )
@@ -334,7 +334,7 @@ CRITICAL GROUNDING INSTRUCTIONS:
 Retrieved Past Case Memories from ChromaDB vector memory are provided above. YOU MUST ALWAYS EXPLICITLY CITE AND COMPARE THE USER PROPOSAL AGAINST THESE RETRIEVED PAST CASES in both your 'explanation' and 'key_factors':
 1. Identify the most relevant past case from the retrieved list (e.g. Croma Electronics, Dell India, HP Store, IFET College, etc.).
 2. EXPLICITLY MENTION THE PAST VENDOR NAME, PAST AMOUNT, AND HISTORICAL OUTCOME STATE (HEALTHY / STRAINED) in your 'explanation' and 'key_factors'.
-   - In Tamil responses, explicitly cite the past case name and outcome (e.g., 'முன்பு Croma Electronics நிறுவனத்தில் ரூ. 28,000 செலவிட்ட போது பெறப்பட்ட அனுபவத்தின் அடிப்படையில்...').
+   - In Tamil responses, keep original naming words with Tamil translations in brackets (e.g. 'Anna University Fees (அண்ணா பல்கலைக்கழக கட்டணம்)', 'Dell India (டெல் கணினி நிறுவனம்)').
    - In English responses, cite the exact past case (e.g., 'Comparing this with past Croma Electronics expense of Rs. 28,000 which resulted in a HEALTHY state...').
 3. Explain what lesson was learned from that past expenditure and why it supports or warns against the current proposal.
 4. Combine that historical case comparison with your live balance and 30-day forecast trajectory to form your final verdict.
