@@ -412,11 +412,16 @@ def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, b
         v_name = c0.get('vendor_or_client', c0.get('metadata', {}).get('vendor_or_client', 'Past Case'))
         v_amt = c0.get('amount', c0.get('metadata', {}).get('amount', 0.0))
         v_out = c0.get('outcome', c0.get('metadata', {}).get('outcome', 'healthy')).upper()
-        
-        top_case_text_ta = f"முன்பு {v_name} நிறுவனத்தில் ரூ. {v_amt:,.2f} செலவிடப்பட்ட போது பெறப்பட்ட அனுபவத்துடன் ({v_out}) ஒப்பிடுகையில், "
-        top_case_text_en = f"Comparing this proposal with past transaction for {v_name} of Rs. {v_amt:,.2f} (Outcome: {v_out}), "
-        top_case_factor_ta = f"ஒத்த முந்தைய நிகழ்வு ஒப்பீடு: {v_name} (ரூ. {v_amt:,.2f}) - நிலை: {v_out}"
-        top_case_factor_en = f"Similar past case comparison: {v_name} (Rs. {v_amt:,.2f}) - Historical Outcome: {v_out}"
+        v_cat = c0.get('category', c0.get('metadata', {}).get('category', ''))
+        v_notes = c0.get('notes', c0.get('metadata', {}).get('notes', ''))
+
+        cat_str = f" [{v_cat}]" if v_cat else ""
+        note_str = f" — '{v_notes}'" if v_notes else ""
+
+        top_case_text_ta = f"முன்பு {v_name}{cat_str} நிறுவனத்தில் ரூ. {v_amt:,.2f} செலவிடப்பட்ட போது பெறப்பட்ட அனுபவத்துடன் (நிலை: {v_out}{note_str}) ஒப்பிடுகையில், "
+        top_case_text_en = f"Comparing this proposal with past {v_name}{cat_str} transaction of Rs. {v_amt:,.2f} (Outcome: {v_out}{note_str}), "
+        top_case_factor_ta = f"ஒத்த முந்தைய நிகழ்வு ஒப்பீடு: {v_name}{cat_str} - ரூ. {v_amt:,.2f} (நிலை: {v_out})"
+        top_case_factor_en = f"Similar past case comparison: {v_name}{cat_str} - Rs. {v_amt:,.2f} (Historical Outcome: {v_out})"
 
     # Check for personal / education keyword context
     is_personal_education = any(w in user_query.lower() for w in ['college', 'fees', 'tuition', 'son', 'school', 'education', 'காலேஜ்', 'ஃபீஸ்'])
