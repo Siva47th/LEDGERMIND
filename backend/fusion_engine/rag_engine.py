@@ -145,8 +145,6 @@ def normalize_search_query(user_query, api_key=None):
     return search_text
 
 
-def generate_advisor_recommendation(user_query, top_k=4, language="en"):
-    """
 def translate_vendor_to_tamil(vendor):
     if not vendor:
         return "முந்தைய நிறுவனம்"
@@ -312,23 +310,29 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     parsed_amount = extract_amount_from_query(user_query, api_key=api_key)
     expected_post_bal = current_balance - parsed_amount
 
+    parsed_amt_str = f"{parsed_amount:,.2f}"
+    exp_post_bal_str = f"{expected_post_bal:,.2f}"
+    curr_bal_str = f"{current_balance:,.2f}"
+    alert_thresh_str = f"{BALANCE_ALERT_THRESHOLD:,.2f}"
+    blend_wt_str = f"{blend_weight:.2f}"
+
     prompt = f"""
 USER PROPOSAL / QUERY:
 "{user_query}"
 
 EXTRACTED PROPOSAL DETAILS:
-- Parsed Numerical Transaction Outlay: Rs. {parsed_amount:,.2f}
-- Estimated Post-Transaction Reserve: Rs. {expected_post_bal:,.2f}
+- Parsed Numerical Transaction Outlay: Rs. {parsed_amt_str}
+- Estimated Post-Transaction Reserve: Rs. {exp_post_bal_str}
 
 LIVE FINANCIAL CONTEXT:
-- Current Live Cash Balance: Rs. {current_balance:,.2f}
-- Safety Alert Threshold: Rs. {BALANCE_ALERT_THRESHOLD:,.2f}
+- Current Live Cash Balance: Rs. {curr_bal_str}
+- Safety Alert Threshold: Rs. {alert_thresh_str}
 - Cash Flow Forecast Summary: {forecast_summary}
 
 PAST CASE MEMORY (Retrieved via Cosine Similarity from ChromaDB):
 {formatted_cases}
 
-ADAPTIVE BLENDING WEIGHT: {blend_weight:.2f} (1.00 means high historical grounding; 0.00 means generic rules).
+ADAPTIVE BLENDING WEIGHT: {blend_wt_str} (1.00 means high historical grounding; 0.00 means generic rules).
 
 CRITICAL GROUNDING INSTRUCTIONS:
 Retrieved Past Case Memories from ChromaDB vector memory are provided above. YOU MUST ALWAYS EXPLICITLY CITE AND COMPARE THE USER PROPOSAL AGAINST THESE RETRIEVED PAST CASES in both your 'explanation' and 'key_factors':
@@ -344,11 +348,11 @@ Retrieved Past Case Memories from ChromaDB vector memory are provided above. YOU
 INSTRUCTIONS:
 Analyze the user proposal and respond in STRICT JSON format with EXACTLY these keys:
 {{
-  "verdict": "Recommended" | "Proceed with Caution" | "Not Recommended",
+  "verdict": "Recommended | Proceed with Caution | Not Recommended",
   "explanation": "Detailed 2-3 sentence explanation explaining the reasoning, explicitly referencing the past vendor/case memory, historical outcome, and live balance.",
   "key_factors": ["Point 1 (explicitly citing past case vendor name and historical outcome)", "Point 2 (live balance check)", "Point 3 (forecast trajectory)"],
-  "estimated_post_balance": <numeric float estimate of cash balance if spent>,
-  "risk_level": "Low" | "Medium" | "High",
+  "estimated_post_balance": 0.0,
+  "risk_level": "Low | Medium | High",
   "suggested_action": "Actionable next step advice for the business owner"
 }}
 """
