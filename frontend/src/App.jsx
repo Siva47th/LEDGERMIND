@@ -1020,7 +1020,7 @@ function App() {
                     </div>
                     <div className="metric-details">
                       <span className="metric-detail-label">Total Income</span>
-                      <span className="metric-detail-value" style={{ color: '#34d399' }}>Rs.{stats.total_income ? stats.total_income.toLocaleString() : '0'}</span>
+                      <span className="metric-detail-value" style={{ color: '#166534', fontWeight: 800 }}>Rs.{stats.total_income ? stats.total_income.toLocaleString() : '0'}</span>
                     </div>
                   </div>
 
@@ -1030,7 +1030,7 @@ function App() {
                     </div>
                     <div className="metric-details">
                       <span className="metric-detail-label">Total Expenses</span>
-                      <span className="metric-detail-value" style={{ color: '#f87171' }}>Rs.{stats.total_expenses ? stats.total_expenses.toLocaleString() : '0'}</span>
+                      <span className="metric-detail-value" style={{ color: '#b91c1c', fontWeight: 800 }}>Rs.{stats.total_expenses ? stats.total_expenses.toLocaleString() : '0'}</span>
                     </div>
                   </div>
 
@@ -1697,22 +1697,22 @@ function App() {
                   <>
                     {/* Alert Banner if risk detected */}
                     {forecastData.alert?.has_risk ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '1rem 1.5rem', borderRadius: '16px' }}>
-                        <ShieldAlert size={24} color="#ef4444" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#fee2e2', border: '1px solid #fca5a5', padding: '1rem 1.5rem', borderRadius: '16px' }}>
+                        <ShieldAlert size={24} color="#b91c1c" />
                         <div style={{ textAlign: 'left' }}>
-                          <h4 style={{ margin: 0, fontWeight: 700, color: 'white' }}>Liquidity Alert: Projected Cash Deficit</h4>
-                          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#f87171' }}>
+                          <h4 style={{ margin: 0, fontWeight: 800, color: '#991b1b' }}>Liquidity Alert: Projected Cash Deficit</h4>
+                          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#b91c1c', fontWeight: 600 }}>
                             Your cash balance is predicted to fall below the safety threshold of Rs.10,000.00 on <strong>{forecastData.alert.first_risk_date}</strong>. 
                             There are <strong>{forecastData.alert.risk_days_count}</strong> critical risk days projected in the next 30 days.
                           </p>
                         </div>
                       </div>
                     ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '1rem 1.5rem', borderRadius: '16px' }}>
-                        <CheckCircle size={24} color="#34d399" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#dcfce7', border: '1px solid #bbf7d0', padding: '1rem 1.5rem', borderRadius: '16px' }}>
+                        <CheckCircle size={24} color="#166534" />
                         <div style={{ textAlign: 'left' }}>
-                          <h4 style={{ margin: 0, fontWeight: 700, color: 'white' }}>Cash Flow Forecast Stable</h4>
-                          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#a7f3d0' }}>
+                          <h4 style={{ margin: 0, fontWeight: 800, color: '#14532d' }}>Cash Flow Forecast Stable</h4>
+                          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#15803d', fontWeight: 600 }}>
                             Your cash balance is predicted to remain comfortably above the safety threshold (Rs.10,000.00) for the next 30 days.
                           </p>
                         </div>

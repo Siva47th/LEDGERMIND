@@ -20,7 +20,7 @@ body {
   display: block;
   min-width: 320px;
   min-height: 100vh;
-  background: linear-gradient(135deg, #c7d2fe 0%, #e0e7ff 45%, #d8b4fe 100%);
+  background: linear-gradient(135deg, #b7c5fe 0%, #c7d2fe 35%, #dbeafe 65%, #d8b4fe 100%);
   color: #0f172a;
   overflow: hidden;
 }
