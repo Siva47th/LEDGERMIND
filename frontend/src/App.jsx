@@ -1142,8 +1142,8 @@ function App() {
                                     {txn.transaction_type === 'income' ? '↑ Income' : txn.transaction_type === 'return_in' ? '↑ Return' : txn.transaction_type === 'return_out' ? '↓ Refund' : '↓ Expense'}
                                   </span>
                                 </td>
-                                <td style={{ fontWeight: 600 }}>{txn.vendor_or_client}</td>
-                                <td style={{ textAlign: 'right', fontWeight: 600, color: txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '#34d399' : '#f1f5f9' }}>
+                                <td style={{ fontWeight: 700, color: '#0f172a' }}>{txn.vendor_or_client}</td>
+                                <td style={{ textAlign: 'right', fontWeight: 700, color: txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '#166534' : '#b91c1c' }}>
                                   {txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '+' : '-'}Rs.{txn.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </td>
                               </tr>
@@ -1178,10 +1178,12 @@ function App() {
                         onClick={() => setSelectedCategory(cat)}
                         style={{
                           cursor: 'pointer',
-                          background: selectedCategory === cat ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255,255,255,0.02)',
-                          border: selectedCategory === cat ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid rgba(255,255,255,0.04)',
-                          color: selectedCategory === cat ? '#818cf8' : '#94a3b8',
-                          padding: '0.4rem 0.8rem'
+                          background: selectedCategory === cat ? '#ffffff' : 'rgba(255, 255, 255, 0.75)',
+                          border: selectedCategory === cat ? '1px solid #4338ca' : '1px solid #c7d2fe',
+                          color: selectedCategory === cat ? '#0f172a' : '#334155',
+                          fontWeight: 700,
+                          padding: '0.4rem 0.8rem',
+                          boxShadow: selectedCategory === cat ? '0 4px 14px rgba(99, 102, 241, 0.15)' : 'none'
                         }}
                       >
                         {cat}
@@ -1189,13 +1191,13 @@ function App() {
                     ))}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{ color: '#64748b', fontSize: '0.85rem' }}>
+                    <div style={{ color: '#334155', fontSize: '0.85rem', fontWeight: 700 }}>
                       Showing <strong>{transactions.length}</strong> entries
                     </div>
                     <button
                       className="btn-primary"
                       onClick={deduplicateTransactions}
-                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.25)' }}
+                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5', fontWeight: 700 }}
                       title="Remove identical duplicate records"
                     >
                       Clean Duplicates
@@ -1203,7 +1205,7 @@ function App() {
                     <button
                       className="btn-primary"
                       onClick={downloadTransactionsCSV}
-                      style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', background: 'rgba(255,255,255,0.04)', color: 'white', border: '1px solid rgba(255,255,255,0.08)' }}
+                      style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', background: '#ffffff', color: '#0f172a', border: '1px solid #c7d2fe', fontWeight: 700 }}
                     >
                       Export Ledger (.CSV)
                     </button>
@@ -1230,39 +1232,39 @@ function App() {
                       <tbody>
                         {transactions.map((txn) => (
                           <tr key={txn.id}>
-                            <td>{txn.date}</td>
+                            <td style={{ fontWeight: 700, color: '#0f172a' }}>{txn.date}</td>
                             <td>
                               <select
                                 value={txn.transaction_type}
                                 onChange={(e) => updateTransactionType(txn.id, e.target.value)}
                                 style={{
-                                  background: txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? 'rgba(52, 211, 153, 0.12)' : 'rgba(248, 113, 113, 0.12)',
-                                  color: txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '#34d399' : '#f87171',
-                                  border: `1px solid ${txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? 'rgba(52, 211, 153, 0.3)' : 'rgba(248, 113, 113, 0.3)'}`,
+                                  background: txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '#dcfce7' : '#fee2e2',
+                                  color: txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '#166534' : '#b91c1c',
+                                  border: `1px solid ${txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '#bbf7d0' : '#fca5a5'}`,
                                   borderRadius: '8px',
                                   padding: '0.25rem 0.5rem',
                                   fontSize: '0.75rem',
-                                  fontWeight: 600,
+                                  fontWeight: 700,
                                   cursor: 'pointer',
                                   outline: 'none'
                                 }}
                               >
-                                <option value="expense" style={{ background: '#0f1629', color: '#f87171' }}>↓ Expense</option>
-                                <option value="income" style={{ background: '#0f1629', color: '#34d399' }}>↑ Income</option>
-                                <option value="return_in" style={{ background: '#0f1629', color: '#34d399' }}>↑ Return In</option>
-                                <option value="return_out" style={{ background: '#0f1629', color: '#f87171' }}>↓ Refund Out</option>
+                                <option value="expense" style={{ background: '#ffffff', color: '#b91c1c' }}>↓ Expense</option>
+                                <option value="income" style={{ background: '#ffffff', color: '#166534' }}>↑ Income</option>
+                                <option value="return_in" style={{ background: '#ffffff', color: '#166534' }}>↑ Return In</option>
+                                <option value="return_out" style={{ background: '#ffffff', color: '#b91c1c' }}>↓ Refund Out</option>
                               </select>
                             </td>
-                            <td style={{ fontWeight: 700, color: '#ffffff' }}>{txn.vendor_or_client}</td>
+                            <td style={{ fontWeight: 800, color: '#0f172a' }}>{txn.vendor_or_client}</td>
                             <td>
                               <span className={`badge ${txn.category === 'Shopping' ? 'category-shopping' : 'category'}`}>
                                 {txn.category}
                               </span>
                             </td>
-                            <td style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.85rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }} title={txn.user_notes}>
+                            <td style={{ color: '#334155', fontWeight: 600, fontStyle: 'italic', fontSize: '0.85rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }} title={txn.user_notes}>
                               {txn.user_notes || '—'}
                             </td>
-                            <td style={{ textAlign: 'right', fontWeight: 600, color: txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '#34d399' : '#f1f5f9' }}>
+                            <td style={{ textAlign: 'right', fontWeight: 800, color: txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '#166534' : '#b91c1c' }}>
                               {txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '+' : '-'}Rs.{txn.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td style={{ textAlign: 'center' }}>
@@ -1276,36 +1278,36 @@ function App() {
                                 value={txn.user_outcome || ''}
                                 onChange={(e) => saveOutcomeLabel(txn.id, e.target.value)}
                                 style={{
-                                  background: txn.user_outcome ? 'rgba(99, 102, 241, 0.12)' : 'rgba(255,255,255,0.04)',
+                                  background: txn.user_outcome ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255,255,255,0.7)',
                                   color: txn.user_outcome ? {
-                                    'Productive': '#34d399',
-                                    'Necessary': '#60a5fa',
-                                    'Wasteful': '#f87171',
-                                    'Pending Review': '#fbbf24',
-                                    'Break-even': '#94a3b8'
-                                  }[txn.user_outcome] || '#c084fc' : '#64748b',
-                                  border: '1px solid rgba(255,255,255,0.08)',
+                                    'Productive': '#166534',
+                                    'Necessary': '#1d4ed8',
+                                    'Wasteful': '#b91c1c',
+                                    'Pending Review': '#b45309',
+                                    'Break-even': '#334155'
+                                  }[txn.user_outcome] || '#4338ca' : '#334155',
+                                  border: '1px solid #c7d2fe',
                                   borderRadius: '8px',
                                   padding: '0.3rem 0.5rem',
                                   fontSize: '0.78rem',
-                                  fontWeight: txn.user_outcome ? 600 : 400,
+                                  fontWeight: 700,
                                   cursor: 'pointer',
                                   minWidth: '120px',
                                   outline: 'none',
                                   appearance: 'none',
                                   WebkitAppearance: 'none',
-                                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
                                   backgroundRepeat: 'no-repeat',
                                   backgroundPosition: 'right 0.4rem center',
                                   paddingRight: '1.5rem'
                                 }}
                               >
-                                <option value="" style={{ background: '#0f1629', color: '#64748b' }}>— Set Outcome —</option>
-                                <option value="Productive" style={{ background: '#0f1629', color: '#34d399' }}>✅ Productive</option>
-                                <option value="Necessary" style={{ background: '#0f1629', color: '#60a5fa' }}>📋 Necessary</option>
-                                <option value="Wasteful" style={{ background: '#0f1629', color: '#f87171' }}>❌ Wasteful</option>
-                                <option value="Pending Review" style={{ background: '#0f1629', color: '#fbbf24' }}>⏳ Pending Review</option>
-                                <option value="Break-even" style={{ background: '#0f1629', color: '#94a3b8' }}>⚖️ Break-even</option>
+                                <option value="" style={{ background: '#ffffff', color: '#334155' }}>— Set Outcome —</option>
+                                <option value="Productive" style={{ background: '#ffffff', color: '#166534' }}>✅ Productive</option>
+                                <option value="Necessary" style={{ background: '#ffffff', color: '#1d4ed8' }}>📋 Necessary</option>
+                                <option value="Wasteful" style={{ background: '#ffffff', color: '#b91c1c' }}>❌ Wasteful</option>
+                                <option value="Pending Review" style={{ background: '#ffffff', color: '#b45309' }}>⏳ Pending Review</option>
+                                <option value="Break-even" style={{ background: '#ffffff', color: '#334155' }}>⚖️ Break-even</option>
                               </select>
                             </td>
                             <td style={{ textAlign: 'center' }}>
@@ -1315,14 +1317,14 @@ function App() {
                                 style={{
                                   background: 'none',
                                   border: 'none',
-                                  color: '#64748b',
+                                  color: '#475569',
                                   cursor: 'pointer',
                                   padding: '0.3rem',
                                   borderRadius: '6px',
                                   transition: 'color 0.2s'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
-                                onMouseLeave={(e) => e.currentTarget.style.color = '#64748b'}
+                                onMouseEnter={(e) => e.currentTarget.style.color = '#b91c1c'}
+                                onMouseLeave={(e) => e.currentTarget.style.color = '#475569'}
                               >
                                 <Trash2 size={16} />
                               </button>
@@ -1350,15 +1352,16 @@ function App() {
                 {uploadState.status === 'idle' && (
                   <>
                     {/* Mode Toggles */}
-                    <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+                    <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid rgba(99, 102, 241, 0.12)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
                       <button 
                         className={`btn-primary ${uploadMode === 'ocr' ? 'active' : ''}`}
                         style={{ 
-                          background: uploadMode === 'ocr' ? '#818cf8' : 'rgba(255,255,255,0.02)',
-                          color: 'white',
-                          border: uploadMode === 'ocr' ? 'none' : '1px solid rgba(255,255,255,0.08)',
-                          boxShadow: uploadMode === 'ocr' ? '0 0 12px rgba(129, 140, 248, 0.3)' : 'none',
-                          padding: '0.5rem 1.25rem'
+                          background: uploadMode === 'ocr' ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                          color: '#0f172a',
+                          border: '1px solid #c7d2fe',
+                          boxShadow: uploadMode === 'ocr' ? '0 4px 14px rgba(99, 102, 241, 0.15)' : 'none',
+                          padding: '0.5rem 1.25rem',
+                          fontWeight: 800
                         }}
                         onClick={() => setUploadMode('ocr')}
                       >
@@ -1367,11 +1370,12 @@ function App() {
                       <button 
                         className={`btn-primary ${uploadMode === 'manual' ? 'active' : ''}`}
                         style={{ 
-                          background: uploadMode === 'manual' ? '#818cf8' : 'rgba(255,255,255,0.02)',
-                          color: 'white',
-                          border: uploadMode === 'manual' ? 'none' : '1px solid rgba(255,255,255,0.08)',
-                          boxShadow: uploadMode === 'manual' ? '0 0 12px rgba(129, 140, 248, 0.3)' : 'none',
-                          padding: '0.5rem 1.25rem'
+                          background: uploadMode === 'manual' ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                          color: '#0f172a',
+                          border: '1px solid #c7d2fe',
+                          boxShadow: uploadMode === 'manual' ? '0 4px 14px rgba(99, 102, 241, 0.15)' : 'none',
+                          padding: '0.5rem 1.25rem',
+                          fontWeight: 800
                         }}
                         onClick={() => setUploadMode('manual')}
                       >
@@ -1386,7 +1390,7 @@ function App() {
                         onDragOver={handleDrag}
                         onDragLeave={handleDrag}
                         onDrop={handleDrop}
-                        style={{ borderStyle: dragActive ? 'solid' : 'dashed', borderColor: dragActive ? '#818cf8' : 'rgba(255,255,255,0.12)' }}
+                        style={{ borderStyle: dragActive ? 'solid' : 'dashed', borderColor: dragActive ? '#4338ca' : '#a5b4fc', background: dragActive ? '#ffffff' : 'rgba(255, 255, 255, 0.65)' }}
                       >
                         <input 
                           type="file" 
@@ -1399,7 +1403,7 @@ function App() {
                           <Upload size={36} className="dropzone-icon" />
                           <div className="dropzone-title">Drag & Drop your invoice here</div>
                           <div className="dropzone-subtitle">Supports PDF files, PNG, or JPEG screenshots (Max 5MB)</div>
-                          <button className="btn-primary" style={{ marginTop: '1.5rem', pointerEvents: 'none' }}>
+                          <button className="btn-primary" style={{ marginTop: '1.5rem', pointerEvents: 'none', background: '#ffffff', color: '#0f172a', border: '1px solid #c7d2fe', fontWeight: 800 }}>
                             Browse File
                           </button>
                         </label>
@@ -1408,18 +1412,18 @@ function App() {
                       <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', textAlign: 'left' }}>
                         <div className="fields-confirm-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                           <div className="field-group">
-                            <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Vendor / Client</label>
+                            <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Vendor / Client</label>
                             <input 
                               type="text" 
                               placeholder="e.g. ABC Traders, Client XYZ"
                               value={manualForm.vendor_or_client}
                               onChange={(e) => setManualForm({ ...manualForm, vendor_or_client: e.target.value })}
                               required 
-                              style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none' }}
+                              style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', fontWeight: 600 }}
                             />
                           </div>
                           <div className="field-group">
-                            <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Amount (Rs.)</label>
+                            <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Amount (Rs.)</label>
                             <input 
                               type="number" 
                               step="0.01"
@@ -1427,55 +1431,55 @@ function App() {
                               value={manualForm.amount}
                               onChange={(e) => setManualForm({ ...manualForm, amount: e.target.value })}
                               required 
-                              style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none' }}
+                              style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', fontWeight: 600 }}
                             />
                           </div>
                           <div className="field-group">
-                            <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Date</label>
+                            <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Date</label>
                             <input 
                               type="date" 
                               value={manualForm.date}
                               onChange={(e) => setManualForm({ ...manualForm, date: e.target.value })}
                               required 
-                              style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none' }}
+                              style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', fontWeight: 600 }}
                             />
                           </div>
                           <div className="field-group">
-                            <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Category</label>
+                            <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Category</label>
                             <select 
                               value={manualForm.category}
                               onChange={(e) => setManualForm({ ...manualForm, category: e.target.value })}
-                              style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '42px' }}
+                              style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '42px', fontWeight: 600 }}
                             >
-                              <option value="Miscellaneous">Miscellaneous</option>
-                              <option value="Utilities">Utilities</option>
-                              <option value="Software">Software</option>
-                              <option value="Marketing">Marketing</option>
-                              <option value="Shopping">Shopping</option>
-                              <option value="Education">Education</option>
-                              <option value="Financial">Financial</option>
+                              <option value="Miscellaneous" style={{ background: '#ffffff', color: '#0f172a' }}>Miscellaneous</option>
+                              <option value="Utilities" style={{ background: '#ffffff', color: '#0f172a' }}>Utilities</option>
+                              <option value="Software" style={{ background: '#ffffff', color: '#0f172a' }}>Software</option>
+                              <option value="Marketing" style={{ background: '#ffffff', color: '#0f172a' }}>Marketing</option>
+                              <option value="Shopping" style={{ background: '#ffffff', color: '#0f172a' }}>Shopping</option>
+                              <option value="Education" style={{ background: '#ffffff', color: '#0f172a' }}>Education</option>
+                              <option value="Financial" style={{ background: '#ffffff', color: '#0f172a' }}>Financial</option>
                             </select>
                           </div>
                           <div className="field-group">
-                            <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Transaction Type</label>
+                            <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Transaction Type</label>
                             <select 
                               value={manualForm.transaction_type}
                               onChange={(e) => setManualForm({ ...manualForm, transaction_type: e.target.value })}
-                              style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '42px' }}
+                              style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '42px', fontWeight: 600 }}
                             >
-                              <option value="expense">↓ Expense (Money Out)</option>
-                              <option value="income">↑ Income (Money In)</option>
-                              <option value="return_in">↑ Refund Received</option>
-                              <option value="return_out">↓ Refund Given</option>
+                              <option value="expense" style={{ background: '#ffffff', color: '#b91c1c' }}>↓ Expense (Money Out)</option>
+                              <option value="income" style={{ background: '#ffffff', color: '#166534' }}>↑ Income (Money In)</option>
+                              <option value="return_in" style={{ background: '#ffffff', color: '#166534' }}>↑ Refund Received</option>
+                              <option value="return_out" style={{ background: '#ffffff', color: '#b91c1c' }}>↓ Refund Given</option>
                             </select>
                           </div>
                           <div className="field-group" style={{ gridColumn: 'span 2' }}>
-                            <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Reasoning / Notes</label>
+                            <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Reasoning / Notes</label>
                             <textarea 
                               placeholder="Explain the purpose of this transaction (e.g. AWS renewal, client payment for services...)"
                               value={manualForm.user_notes || ''}
                               onChange={(e) => setManualForm({ ...manualForm, user_notes: e.target.value })}
-                              style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none', minHeight: '80px', resize: 'vertical' }}
+                              style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', minHeight: '80px', resize: 'vertical', fontWeight: 600 }}
                             />
                           </div>
                         </div>
@@ -1484,7 +1488,7 @@ function App() {
                             type="submit" 
                             className="btn-primary" 
                             disabled={manualSubmitting}
-                            style={{ padding: '0.65rem 1.75rem' }}
+                            style={{ padding: '0.65rem 1.75rem', background: '#4338ca', color: '#ffffff', fontWeight: 800 }}
                           >
                             {manualSubmitting ? 'Recording...' : 'Record Transaction'}
                           </button>
@@ -1498,16 +1502,16 @@ function App() {
                 {uploadState.status === 'uploading' && (
                   <div className="uploading-animation-card">
                     <div className="progress-header">
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a' }}>
                         <RefreshCw size={14} className="loading-spinner" />
                         Processing document with Tesseract OCR...
                       </span>
-                      <span>{uploadState.progress}%</span>
+                      <span style={{ color: '#0f172a' }}>{uploadState.progress}%</span>
                     </div>
                     <div className="progress-track">
                       <div className="progress-bar" style={{ width: `${uploadState.progress}%` }}></div>
                     </div>
-                    <span style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'left' }}>
+                    <span style={{ fontSize: '0.8rem', color: '#334155', fontWeight: 600, textAlign: 'left' }}>
                       Converting pages, executing OpenCV preprocessing, and extracting financial fields...
                     </span>
                   </div>
@@ -1516,11 +1520,11 @@ function App() {
                 {/* Processing Success state */}
                 {uploadState.status === 'success' && uploadState.data && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(52, 211, 153, 0.08)', padding: '1rem 1.5rem', borderRadius: '12px', border: '1px solid rgba(52, 211, 153, 0.2)' }}>
-                      <CheckCircle size={24} color="#34d399" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#dcfce7', padding: '1rem 1.5rem', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
+                      <CheckCircle size={24} color="#166534" />
                       <div style={{ textAlign: 'left' }}>
-                        <h4 style={{ margin: 0, fontWeight: 700, color: 'white' }}>Extraction Succeeded!</h4>
-                        <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>
+                        <h4 style={{ margin: 0, fontWeight: 800, color: '#14532d' }}>Extraction Succeeded!</h4>
+                        <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: '#15803d', fontWeight: 600 }}>
                           Invoice processed and ledger balance synced successfully.
                         </p>
                       </div>
@@ -1528,7 +1532,7 @@ function App() {
 
                     {/* OCR Text preview pane */}
                     <div style={{ textAlign: 'left' }}>
-                      <h4 style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+                      <h4 style={{ fontSize: '0.85rem', color: '#334155', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
                         Extracted Raw Text Snippet (OCR Log)
                       </h4>
                       <div className="ocr-preview-pane">
@@ -1538,28 +1542,28 @@ function App() {
 
                     {/* Extracted Form validation preview */}
                     <div>
-                      <h4 style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', textAlign: 'left' }}>
+                      <h4 style={{ fontSize: '0.85rem', color: '#334155', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', textAlign: 'left' }}>
                         Parsed Ledger Fields
                       </h4>
                       <div className="fields-confirm-grid">
                         <div className="field-group">
-                          <label>Vendor / Client</label>
-                          <input type="text" value={uploadState.data.vendor_or_client || uploadState.data.vendor || ''} readOnly />
+                          <label style={{ color: '#0f172a', fontWeight: 800 }}>Vendor / Client</label>
+                          <input type="text" value={uploadState.data.vendor_or_client || uploadState.data.vendor || ''} readOnly style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #c7d2fe', color: '#0f172a', fontWeight: 700 }} />
                         </div>
                         <div className="field-group">
-                          <label>Amount (Rs.)</label>
-                          <input type="text" value={`Rs.${uploadState.data.amount.toFixed(2)}`} readOnly />
+                          <label style={{ color: '#0f172a', fontWeight: 800 }}>Amount (Rs.)</label>
+                          <input type="text" value={`Rs.${uploadState.data.amount.toFixed(2)}`} readOnly style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #c7d2fe', color: '#0f172a', fontWeight: 700 }} />
                         </div>
                         <div className="field-group">
-                          <label>Date</label>
-                          <input type="text" value={uploadState.data.date} readOnly />
+                          <label style={{ color: '#0f172a', fontWeight: 800 }}>Date</label>
+                          <input type="text" value={uploadState.data.date} readOnly style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #c7d2fe', color: '#0f172a', fontWeight: 700 }} />
                         </div>
                         <div className="field-group">
-                          <label>Category</label>
-                          <input type="text" value={uploadState.data.category} readOnly />
+                          <label style={{ color: '#0f172a', fontWeight: 800 }}>Category</label>
+                          <input type="text" value={uploadState.data.category} readOnly style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #c7d2fe', color: '#0f172a', fontWeight: 700 }} />
                         </div>
                         <div className="field-group">
-                          <label>Transaction Type</label>
+                          <label style={{ color: '#0f172a', fontWeight: 800 }}>Transaction Type</label>
                           <select 
                             value={uploadState.data.transaction_type || 'expense'} 
                             onChange={(e) => {
@@ -1573,10 +1577,10 @@ function App() {
                               }
                             }}
                             style={{ 
-                              color: uploadState.data.transaction_type === 'income' || uploadState.data.transaction_type === 'return_in' ? '#34d399' : '#f87171',
-                              fontWeight: 600,
-                              background: 'rgba(15,23,42,0.6)',
-                              border: '1px solid rgba(255,255,255,0.08)',
+                              color: uploadState.data.transaction_type === 'income' || uploadState.data.transaction_type === 'return_in' ? '#166534' : '#b91c1c',
+                              fontWeight: 800,
+                              background: 'rgba(255,255,255,0.95)',
+                              border: '1px solid #c7d2fe',
                               borderRadius: '8px',
                               padding: '0.65rem 0.85rem',
                               fontSize: '0.9rem',
@@ -1585,32 +1589,33 @@ function App() {
                               cursor: 'pointer'
                             }} 
                           >
-                            <option value="expense" style={{ background: '#0f1629', color: '#f87171' }}>↓ Expense (Money Out)</option>
-                            <option value="income" style={{ background: '#0f1629', color: '#34d399' }}>↑ Income (Money In)</option>
-                            <option value="return_in" style={{ background: '#0f1629', color: '#34d399' }}>↑ Return In (Refund Received)</option>
-                            <option value="return_out" style={{ background: '#0f1629', color: '#f87171' }}>↓ Refund Out (Refund Given)</option>
+                            <option value="expense" style={{ background: '#ffffff', color: '#b91c1c' }}>↓ Expense (Money Out)</option>
+                            <option value="income" style={{ background: '#ffffff', color: '#166534' }}>↑ Income (Money In)</option>
+                            <option value="return_in" style={{ background: '#ffffff', color: '#166534' }}>↑ Return In (Refund Received)</option>
+                            <option value="return_out" style={{ background: '#ffffff', color: '#b91c1c' }}>↓ Refund Out (Refund Given)</option>
                           </select>
                         </div>
                         <div className="field-group">
-                          <label>Live Balance</label>
+                          <label style={{ color: '#0f172a', fontWeight: 800 }}>Live Balance</label>
                           <input 
                             type="text" 
                             value={`Rs.${(uploadState.data.current_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} (${uploadState.data.outcome_label})`} 
                             readOnly 
                             style={{ 
-                              color: uploadState.data.outcome_label === 'healthy' ? '#34d399' : '#f87171',
-                              fontWeight: 600,
-                              background: 'rgba(15,23,42,0.6)'
+                              color: uploadState.data.outcome_label === 'healthy' ? '#166534' : '#b91c1c',
+                              fontWeight: 800,
+                              background: 'rgba(255,255,255,0.95)',
+                              border: '1px solid #c7d2fe'
                             }} 
                           />
                         </div>
                         <div className="field-group" style={{ gridColumn: 'span 2', marginTop: '0.5rem', textAlign: 'left' }}>
-                          <label style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Reasoning / Notes (Spend Experience)</label>
+                          <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Reasoning / Notes (Spend Experience)</label>
                           <textarea 
                             placeholder="Explain why this invoice was paid in your own words (e.g. software renewal, office utilities...)"
                             value={successNotes}
                             onChange={(e) => setSuccessNotes(e.target.value)}
-                            style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none', minHeight: '60px', resize: 'vertical' }}
+                            style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '8px', fontSize: '0.9rem', width: '100%', outline: 'none', minHeight: '60px', resize: 'vertical', fontWeight: 600 }}
                           />
                         </div>
                       </div>
@@ -1621,7 +1626,7 @@ function App() {
                         className="btn-primary" 
                         onClick={handleSaveSuccessNotes}
                         disabled={savingNotes}
-                        style={{ background: '#34d399', color: '#090d16', border: 'none', fontWeight: 600 }}
+                        style={{ background: '#166534', color: '#ffffff', border: 'none', fontWeight: 800 }}
                       >
                         {savingNotes ? 'Saving Notes...' : 'Save Notes'}
                       </button>
@@ -1631,7 +1636,7 @@ function App() {
                           setSuccessNotes('');
                           setUploadState({ status: 'idle', progress: 0, data: null, error: null });
                         }}
-                        style={{ background: 'rgba(255,255,255,0.04)', color: 'white', border: '1px solid rgba(255,255,255,0.08)' }}
+                        style={{ background: '#ffffff', color: '#0f172a', border: '1px solid #c7d2fe', fontWeight: 700 }}
                       >
                         Upload Another
                       </button>
