@@ -290,7 +290,7 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
         lang_instruction = (
             "CRITICAL NAMING FORMAT INSTRUCTION: The user query is in TAMIL script. "
             "Write your response in natural TAMIL script for 'explanation', 'key_factors' array items, and 'suggested_action'. "
-            "IMPORTANT MANDATORY RULE FOR NAMING WORDS (Vendors, Brands, Entity Names, Categories, Outcomes): Keep the original English naming word as is and PUT ITS TAMIL TRANSLATION IN BRACKETS right after it. "
+            "MANDATORY RULE FOR ALL NAMING WORDS (Vendor Names, Brand Names, Categories, Outcomes): Keep the original English naming word as is and PUT ITS TAMIL TRANSLATION IN BRACKETS right after it. "
             "Examples: "
             "- Vendor Naming: 'Anna University Fees (அண்ணா பல்கலைக்கழக கட்டணம்)', 'Dell India (டெல் கணினி நிறுவனம்)', 'Croma Electronics (க்ரோமா எலக்ட்ரானிக்ஸ்)' "
             "- Category Naming: '[Education (கல்வி)]', '[Shopping (பொருட்கள் வாங்குதல்)]', '[Software (மென்பொருள்)]' "
@@ -338,8 +338,7 @@ CRITICAL GROUNDING INSTRUCTIONS:
 Retrieved Past Case Memories from ChromaDB vector memory are provided above. YOU MUST ALWAYS EXPLICITLY CITE AND COMPARE THE USER PROPOSAL AGAINST THESE RETRIEVED PAST CASES in both your 'explanation' and 'key_factors':
 1. Identify the most relevant past case from the retrieved list (e.g. Croma Electronics, Dell India, HP Store, IFET College, etc.).
 2. EXPLICITLY MENTION THE PAST VENDOR NAME, PAST AMOUNT, AND HISTORICAL OUTCOME STATE (HEALTHY / STRAINED) in your 'explanation' and 'key_factors'.
-   - In Tamil responses, keep original naming words with Tamil translations in brackets (e.g. 'Anna University Fees (அண்ணா பல்கலைக்கழக கட்டணம்)', 'Dell India (டெல் கணினி நிறுவனம்)').
-   - In English responses, cite the exact past case (e.g., 'Comparing this with past Croma Electronics expense of Rs. 28,000 which resulted in a HEALTHY state...').
+   - In Tamil responses, keep original naming words with Tamil translations in brackets.
 3. Explain what lesson was learned from that past expenditure and why it supports or warns against the current proposal.
 4. Combine that historical case comparison with your live balance and 30-day forecast trajectory to form your final verdict.
 
@@ -511,16 +510,19 @@ def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, b
         top_case_text_en = f"Comparing this proposal with past {v_name}{cat_str_en} transaction of Rs. {v_amt:,.2f} (Outcome: {v_out}{note_str_en}), "
         top_case_factor_en = f"Similar past case comparison: {v_name}{cat_str_en} - Rs. {v_amt:,.2f} (Historical Outcome: {v_out})"
 
-        # 100% Pure Tamil versions (Zero English words)
+        # Bracketed Naming Words versions (Original Naming Word + Tamil Translation in Brackets)
         v_ta = translate_vendor_to_tamil(v_name)
         c_ta = translate_category_to_tamil(v_cat)
         o_ta = translate_outcome_to_tamil(v_out)
         n_ta = translate_notes_to_tamil(v_notes)
 
-        cat_str_ta = f" [{c_ta}]" if c_ta else ""
+        v_combined_ta = f"{v_name} ({v_ta})" if v_ta and v_ta != v_name else v_name
+        cat_combined_ta = f" [{v_cat} ({c_ta})]" if v_cat and c_ta != v_cat else (f" [{v_cat}]" if v_cat else "")
+        out_combined_ta = f"{v_out} ({o_ta})"
+
         note_str_ta = f" — '{n_ta}'" if n_ta else ""
-        top_case_text_ta = f"முன்பு {v_ta}{cat_str_ta} நிறுவனத்தில் ரூ. {v_amt:,.2f} செலவிடப்பட்ட போது பெறப்பட்ட அனுபவத்துடன் (நிலை: {o_ta}{note_str_ta}) ஒப்பிடுகையில், "
-        top_case_factor_ta = f"ஒத்த முந்தைய நிகழ்வு ஒப்பீடு: {v_ta}{cat_str_ta} - ரூ. {v_amt:,.2f} (நிலை: {o_ta})"
+        top_case_text_ta = f"முன்பு {v_combined_ta}{cat_combined_ta} நிறுவனத்தில் ரூ. {v_amt:,.2f} செலவிடப்பட்ட போது பெறப்பட்ட அனுபவத்துடன் (நிலை: {out_combined_ta}{note_str_ta}) ஒப்பிடுகையில், "
+        top_case_factor_ta = f"ஒத்த முந்தைய நிகழ்வு ஒப்பீடு: {v_combined_ta}{cat_combined_ta} - ரூ. {v_amt:,.2f} (நிலை: {out_combined_ta})"
 
     # Check for personal / education keyword context
     is_personal_education = any(w in user_query.lower() for w in ['college', 'fees', 'tuition', 'son', 'school', 'education', 'காலேஜ்', 'ஃபீஸ்'])
