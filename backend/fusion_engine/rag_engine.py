@@ -48,13 +48,13 @@ def call_gemini_rest_api(api_key, system_instruction, prompt_text):
     Calls Google Gemini REST API directly.
     Works robustly across Python versions without C-extension protobuf conflicts.
     """
-    preferred_model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+    preferred_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     models_to_try = [
         preferred_model,
-        "gemini-3.5-flash",
-        "gemini-2.5-flash",
-        "gemini-2.5-pro",
-        "gemini-flash-latest"
+        "gemini-1.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+        "gemini-2.0-flash-lite"
     ]
     # Remove duplicates preserving order
     seen = set()
