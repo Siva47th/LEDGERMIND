@@ -54,40 +54,40 @@ const CustomTooltip = ({ active, payload }) => {
     const isForecast = data.actual === null;
     
     return (
-      <div className="glass-card custom-tooltip" style={{ padding: '0.75rem 1rem', border: '1px solid rgba(255,255,255,0.08)', background: '#090d16', color: '#fff', fontSize: '0.8rem', minWidth: '180px', textAlign: 'left', borderRadius: '12px' }}>
-        <div style={{ fontWeight: 600, color: '#94a3b8', marginBottom: '0.4rem' }}>{data.date}</div>
+      <div className="glass-card custom-tooltip" style={{ padding: '0.75rem 1rem', border: '1px solid #c7d2fe', background: '#ffffff', color: '#0f172a', fontSize: '0.8rem', minWidth: '180px', textAlign: 'left', borderRadius: '12px', boxShadow: '0 8px 24px rgba(99, 102, 241, 0.15)' }}>
+        <div style={{ fontWeight: 700, color: '#475569', marginBottom: '0.4rem' }}>{data.date}</div>
         
         {!isForecast ? (
           <>
-            <div style={{ color: '#3b82f6', fontWeight: 700, margin: '0.25rem 0' }}>
+            <div style={{ color: '#1d4ed8', fontWeight: 700, margin: '0.25rem 0' }}>
               Balance: Rs.{data.actual.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', margin: '0.4rem 0' }}></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', color: '#34d399', fontSize: '0.75rem', marginBottom: '0.15rem' }}>
+            <div style={{ borderTop: '1px solid rgba(99, 102, 241, 0.12)', margin: '0.4rem 0' }}></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', color: '#166534', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.15rem' }}>
               <span>Received:</span>
               <span>+Rs.{data.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', color: '#f87171', fontSize: '0.75rem', marginBottom: '0.3rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', color: '#b91c1c', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.3rem' }}>
               <span>Spent:</span>
               <span>-Rs.{(data.expense + data.recurring + data.actual_invoice).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
             </div>
-            <div style={{ color: '#818cf8', fontSize: '0.7rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.3rem', fontStyle: 'italic' }}>
+            <div style={{ color: '#4338ca', fontSize: '0.7rem', borderTop: '1px solid rgba(99, 102, 241, 0.1)', paddingTop: '0.3rem', fontStyle: 'italic', fontWeight: 600 }}>
               {data.description}
             </div>
           </>
         ) : (
           <>
             {data.prophet && (
-              <div style={{ color: '#818cf8', fontWeight: 600, fontSize: '0.75rem' }}>
+              <div style={{ color: '#4338ca', fontWeight: 700, fontSize: '0.75rem' }}>
                 Prophet: Rs.{data.prophet.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
             )}
             {data.arima && (
-              <div style={{ color: '#c084fc', fontWeight: 600, marginTop: '0.15rem', fontSize: '0.75rem' }}>
+              <div style={{ color: '#7e22ce', fontWeight: 700, marginTop: '0.15rem', fontSize: '0.75rem' }}>
                 ARIMA: Rs.{data.arima.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
             )}
-            <div style={{ color: '#64748b', fontSize: '0.7rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.3rem', marginTop: '0.3rem' }}>
+            <div style={{ color: '#475569', fontSize: '0.7rem', borderTop: '1px solid rgba(99, 102, 241, 0.1)', paddingTop: '0.3rem', marginTop: '0.3rem', fontWeight: 600 }}>
               Future Projection
             </div>
           </>
