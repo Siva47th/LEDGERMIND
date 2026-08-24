@@ -219,6 +219,104 @@ function App() {
     }
   };
 
+  const numberToTamilWords = (n) => {
+    n = Math.floor(Number(n));
+    if (isNaN(n) || n <= 0) return '';
+
+    const ones = ['', 'ஒன்று', 'இரண்டு', 'மூன்று', 'நான்கு', 'ஐந்து', 'ஆறு', 'ஏழு', 'எட்டு', 'ஒன்பது'];
+    const tens = ['', 'பத்து', 'இருபது', 'முப்பது', 'நாற்பது', 'ஐம்பது', 'அறுபது', 'எழுபது', 'எண்பது', 'தொன்னூறு'];
+    const tensCombo = ['', 'பதினொன்று', 'பன்னிரண்டு', 'பதின்மூன்று', 'பதினான்கு', 'பதினைந்து', 'பதினாறு', 'பதினேழு', 'பதினெட்டு', 'பத்தொன்பது'];
+    const thousands = {
+      1000: 'ஆயிரம்', 2000: 'இரண்டாயிரம்', 3000: 'மூன்றாயிரம்', 4000: 'நான்காயிரம்', 5000: 'ஐந்தாயிரம்',
+      6000: 'ஆறாயிரம்', 7000: 'ஏழாயிரம்', 8000: 'எட்டாயிரம்', 9000: 'ஒன்பதாயிரம்', 10000: 'பத்தாயிரம்',
+      15000: 'பதினைந்தாயிரம்', 20000: 'இருபதாயிரம்', 25000: 'இருபத்தைந்தாயிரம்', 30000: 'முப்பதாயிரம்',
+      35000: 'முப்பத்தைந்தாயிரம்', 40000: 'நாற்பதாயிரம்', 45000: 'நாற்பத்தைந்தாயிரம்', 50000: 'ஐம்பதாயிரம்',
+      55000: 'ஐம்பத்தைந்தாயிரம்', 60000: 'அறுபதாயிரம்', 65000: 'அறுபத்தைந்தாயிரம்', 70000: 'எழுபதாயிரம்',
+      75000: 'எழுபத்தைந்தாயிரம்', 80000: 'எண்பதாயிரம்', 85000: 'எண்பத்தைந்தாயிரம்', 90000: 'தொன்னூறாயிரம்'
+    };
+
+    if (thousands[n]) return thousands[n];
+
+    let result = '';
+    if (n >= 100000) {
+      const lakh = Math.floor(n / 100000);
+      n %= 100000;
+      result += (lakh === 1 ? 'ஒரு லட்சம்' : `${numberToTamilWords(lakh)} லட்சம்`) + ' ';
+    }
+
+    if (n >= 1000) {
+      const th = Math.floor(n / 1000);
+      n %= 1000;
+      if (thousands[th * 1000]) {
+        result += thousands[th * 1000] + ' ';
+      } else {
+        result += `${numberToTamilWords(th)} ஆயிரம் `;
+      }
+    }
+
+    if (n >= 100) {
+      const h = Math.floor(n / 100);
+      n %= 100;
+      const hundreds = ['', 'நூறு', 'இருநூறு', 'முன்னூறு', 'நானூறு', 'ஐநூறு', 'அறுநூறு', 'எழுநூறு', 'எண்ணூறு', 'தொள்ளாயிரம்'];
+      result += hundreds[h] + ' ';
+    }
+
+    if (n > 0) {
+      if (n < 10) result += ones[n];
+      else if (n > 10 && n < 20) result += tensCombo[n - 10];
+      else {
+        const t = Math.floor(n / 10);
+        const o = n % 10;
+        result += tens[t] + (o ? ' ' + ones[o] : '');
+      }
+    }
+
+    return result.trim();
+  };
+
+  const cleanTextForTTS = (text, isTamil) => {
+    if (!text) return '';
+    let clean = text;
+
+    if (isTamil) {
+      // Remove hyphens before Tamil suffixes (e.g. -க்கு -> க்கு, -இல் -> இல்)
+      clean = clean.replace(/-\s*([அ-ஹா-ௌ்]+)/g, ' $1');
+      clean = clean.replace(/-/g, ' ');
+
+      // Replace currency symbols/codes (Rs., ₹, ரூ., ரூ) followed by numeric amounts
+      clean = clean.replace(/(?:Rs\.|Rs|₹|ரூ\.|ரூ)\s*([\d,]+(?:\.\d+)?)/gi, (match, p1) => {
+        const num = parseFloat(p1.replace(/,/g, ''));
+        if (!isNaN(num)) {
+          const words = numberToTamilWords(num);
+          return words ? `ரூபாய் ${words}` : `ரூபாய் ${num}`;
+        }
+        return `ரூபாய் ${p1}`;
+      });
+
+      // Replace standalone numbers with Tamil words so TTS doesn't spell them digit-by-digit
+      clean = clean.replace(/\b\d+(?:,\d+)*(?:\.\d+)?\b/g, (match) => {
+        const num = parseFloat(match.replace(/,/g, ''));
+        if (!isNaN(num)) {
+          const words = numberToTamilWords(num);
+          return words || match;
+        }
+        return match;
+      });
+
+      // Translate English verdict names for TTS if present
+      clean = clean.replace(/\bRecommended\b/gi, 'பரிந்துரைக்கப்படுகிறது');
+      clean = clean.replace(/\bProceed with Caution\b/gi, 'எச்சரிக்கையுடன் தொடரவும்');
+      clean = clean.replace(/\bNot Recommended\b/gi, 'பரிந்துரைக்கப்படவில்லை');
+    } else {
+      // English TTS cleanup
+      clean = clean.replace(/-\s*/g, ' ');
+      clean = clean.replace(/₹/g, 'Rupees ');
+      clean = clean.replace(/Rs\./gi, 'Rupees ');
+    }
+
+    return clean.replace(/\s+/g, ' ').trim();
+  };
+
   const speakRecommendation = () => {
     if (!('speechSynthesis' in window)) {
       alert('Text-to-Speech is not supported in this browser.');
@@ -233,9 +331,12 @@ function App() {
 
     if (!advisorResult) return;
 
-    const textToSpeak = `${advisorResult.verdict}. ${advisorResult.explanation} ${advisorResult.suggested_action || ''}`;
+    const isTamil = advisorLang === 'ta' || /[\u0B80-\u0BFF]/.test(advisorResult.explanation || '');
+    const rawText = `${advisorResult.verdict}. ${advisorResult.explanation} ${advisorResult.suggested_action || ''}`;
+    const textToSpeak = cleanTextForTTS(rawText, isTamil);
+
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utterance.lang = advisorLang === 'ta' ? 'ta-IN' : 'en-US';
+    utterance.lang = isTamil ? 'ta-IN' : 'en-US';
     utterance.rate = 0.95;
 
     utterance.onstart = () => setIsSpeaking(true);

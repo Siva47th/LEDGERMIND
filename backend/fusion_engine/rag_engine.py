@@ -210,7 +210,8 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     lang_instruction = ""
     if language == "ta":
         lang_instruction = (
-            "IMPORTANT LANGUAGE INSTRUCTION: The user query is in TAMIL / Tanglish. You MUST write your response in clean, natural TAMIL (using Tamil script) for the 'explanation', 'key_factors' array items, and 'suggested_action'. "
+            "IMPORTANT LANGUAGE & TEXT-TO-SPEECH INSTRUCTION: The user query is in TAMIL / Tanglish. You MUST write your response in clean, natural TAMIL (using Tamil script) for the 'explanation', 'key_factors' array items, and 'suggested_action'. "
+            "CRITICAL TTS FORMATTING: Do NOT use hyphens before Tamil suffixes (write '65000க்கு' or 'அறுபத்தைந்தாயிரத்துக்கு' instead of '65,000-க்கு'). Write numbers clearly without hyphens so text-to-speech engines pronounce amounts naturally without saying 'minus'. "
             "Keep 'verdict' strictly as one of ['Recommended', 'Proceed with Caution', 'Not Recommended'] and keep 'estimated_post_balance' as a number."
         )
 
