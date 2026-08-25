@@ -1649,9 +1649,12 @@ function App() {
                             </td>
                             <td style={{ textAlign: 'center' }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-                                <button
-                                  onClick={() => downloadSingleInvoice(txn)}
-                                  title="Download printable digital tax invoice / expense voucher"
+                                <a
+                                  href={`${API_BASE}/invoices/${txn.id}/pdf`}
+                                  download={`FinSense_Invoice_INV-${String(txn.id).padStart(5, '0')}_${String(txn.vendor_or_client || 'Record').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Download authentic standalone offline PDF invoice"
                                   style={{
                                     background: '#e0e7ff',
                                     border: '1px solid #c7d2fe',
@@ -1659,11 +1662,12 @@ function App() {
                                     cursor: 'pointer',
                                     padding: '0.3rem 0.6rem',
                                     borderRadius: '8px',
-                                    display: 'flex',
+                                    display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '0.3rem',
                                     fontSize: '0.75rem',
                                     fontWeight: 700,
+                                    textDecoration: 'none',
                                     boxShadow: '0 2px 5px rgba(99, 102, 241, 0.08)',
                                     transition: 'all 0.2s'
                                   }}
@@ -1678,7 +1682,7 @@ function App() {
                                 >
                                   <Download size={13} />
                                   <span>PDF</span>
-                                </button>
+                                </a>
 
                                 <button
                                   onClick={() => deleteTransaction(txn.id)}
