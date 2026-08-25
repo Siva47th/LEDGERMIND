@@ -486,7 +486,7 @@ function App() {
         }
 
         const chunkText = chunks[currentIdx];
-        const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunkText)}&tl=ta&client=tw-ob`;
+        const audioUrl = `${API_BASE}/tts?text=${encodeURIComponent(chunkText)}&lang=ta`;
         const audio = new Audio(audioUrl);
         currentAudioRef.current = audio;
 
@@ -496,7 +496,7 @@ function App() {
         };
 
         audio.onerror = () => {
-          console.warn("Neural audio playback notice, falling back to WebSpeech");
+          console.warn("Backend TTS playback notice, falling back to WebSpeech");
           fallbackWebSpeech();
         };
 

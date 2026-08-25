@@ -1,8 +1,10 @@
 import os
 import sys
 import sqlite3
+import urllib.request
+import urllib.parse
 from datetime import datetime
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
@@ -736,6 +738,36 @@ def advisor_query():
     except Exception as e:
         print(f"[API Advisor Error] Fusion reasoning failed: {e}")
         return jsonify({"error": f"Advisor fusion engine failed: {str(e)}"}), 500
+
+
+@app.route("/api/tts", methods=["GET"])
+def text_to_speech_proxy():
+    """
+    High-Fidelity Neural Text-to-Speech Streaming Endpoint.
+    Accepts: /api/tts?text=...&lang=ta
+    Streams raw MP3 audio directly to client browser with audio/mpeg content-type.
+    """
+    text = request.args.get("text", "").strip()
+    lang = request.args.get("lang", "ta").strip()
+    if not text:
+        return jsonify({"error": "Missing 'text' query parameter"}), 400
+
+    try:
+        safe_text = text[:200]
+        url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={urllib.parse.quote(safe_text)}&tl={lang}&client=tw-ob"
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://translate.google.com/'
+        })
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            audio_data = resp.read()
+            return Response(audio_data, mimetype="audio/mpeg", headers={
+                "Content-Type": "audio/mpeg",
+                "Cache-Control": "public, max-age=86400"
+            })
+    except Exception as e:
+        print(f"[API TTS Error] TTS generation failed: {e}")
+        return jsonify({"error": f"TTS generation failed: {str(e)}"}), 500
 
 
 @app.route("/api/transactions/anomalies", methods=["GET"])
