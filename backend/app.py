@@ -584,6 +584,204 @@ def delete_transaction(txn_id):
         return jsonify({"error": f"Failed to delete transaction: {str(e)}"}), 500
 
 
+@app.route("/api/invoices/<int:txn_id>/pdf", methods=["GET"])
+def download_invoice_pdf(txn_id):
+    """
+    Generates and streams an authentic, high-quality PDF Tax Invoice / Expense Voucher
+    directly to the user with proper Content-Disposition and application/pdf headers.
+    """
+    try:
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM transactions WHERE id = ?", (txn_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({"error": f"Transaction #{txn_id} not found"}), 404
+
+        txn = dict(row)
+        vendor = txn.get("vendor_or_client", "Entity")
+        amount = float(txn.get("amount", 0.0))
+        txn_type = txn.get("transaction_type", "expense")
+        category = txn.get("category", "General")
+        date_str = txn.get("date", datetime.today().strftime('%Y-%m-%d'))
+        notes = txn.get("user_notes", "")
+        outcome = txn.get("user_outcome", "")
+        health = txn.get("outcome_label", "Healthy")
+
+        is_income = txn_type in ["income", "return_in"]
+        doc_title = "TAX INVOICE / RECEIPT" if is_income else "EXPENSE VOUCHER / BILL"
+        invoice_no = f"INV-{txn_id:05d}"
+        clean_vendor = "".join(c for c in vendor if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
+        filename = f"FinSense_Invoice_{invoice_no}_{clean_vendor}.pdf"
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=36,
+            leftMargin=36,
+            topMargin=36,
+            bottomMargin=36
+        )
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('TitleStyle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=22, textColor=colors.HexColor('#4338ca'), leading=26)
+        sub_style = ParagraphStyle('SubStyle', parent=styles['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor('#64748b'), leading=12)
+        badge_style = ParagraphStyle('BadgeStyle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#166534' if is_income else '#b91c1c'), alignment=2, leading=14)
+        inv_no_style = ParagraphStyle('InvNoStyle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, textColor=colors.HexColor('#0f172a'), alignment=2, leading=16)
+        meta_label_style = ParagraphStyle('MetaLabel', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, textColor=colors.HexColor('#64748b'), leading=10)
+        meta_val_style = ParagraphStyle('MetaVal', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=13, textColor=colors.HexColor('#0f172a'), leading=16)
+        meta_sub_style = ParagraphStyle('MetaSub', parent=styles['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor('#475569'), leading=12)
+        table_head_style = ParagraphStyle('THead', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, textColor=colors.white, leading=11)
+        table_cell_style = ParagraphStyle('TCell', parent=styles['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor('#0f172a'), leading=12)
+        table_amt_style = ParagraphStyle('TAmt', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#0f172a'), alignment=2, leading=13)
+        total_lbl_style = ParagraphStyle('TotLbl', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#475569'), leading=12)
+        total_val_style = ParagraphStyle('TotVal', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor('#166534' if is_income else '#b91c1c'), alignment=2, leading=16)
+        footer_style = ParagraphStyle('Footer', parent=styles['Normal'], fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#94a3b8'), alignment=1, leading=11)
+
+        story = []
+
+        # 1. Header Table
+        header_data = [
+            [
+                Paragraph("<b>FinSense AI</b>", title_style),
+                Paragraph(f"<b>{doc_title}</b>", badge_style)
+            ],
+            [
+                Paragraph("Intelligent Financial Operating System", sub_style),
+                Paragraph(f"<b>{invoice_no}</b>", inv_no_style)
+            ]
+        ]
+        header_table = Table(header_data, colWidths=[280, 240])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+        ]))
+        story.append(header_table)
+        story.append(Spacer(1, 15))
+        story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#e2e8f0'), spaceAfter=15))
+
+        # 2. Metadata Box
+        meta_data = [
+            [
+                Paragraph("RECEIVED FROM (CLIENT)" if is_income else "PAID TO (VENDOR / ENTITY)", meta_label_style),
+                Paragraph("TRANSACTION DATE", meta_label_style)
+            ],
+            [
+                Paragraph(vendor, meta_val_style),
+                Paragraph(date_str, meta_val_style)
+            ],
+            [
+                Paragraph(f"Category: <b>{category}</b>", meta_sub_style),
+                Paragraph(f"System Health: <b>{health}</b>", meta_sub_style)
+            ]
+        ]
+        meta_table = Table(meta_data, colWidths=[280, 240])
+        meta_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+            ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#e2e8f0')),
+            ('PADDING', (0,0), (-1,-1), 8),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        story.append(meta_table)
+        story.append(Spacer(1, 20))
+
+        # 3. Item Table
+        item_data = [
+            [
+                Paragraph("<b>Description / Entity</b>", table_head_style),
+                Paragraph("<b>Category</b>", table_head_style),
+                Paragraph("<b>Type</b>", table_head_style),
+                Paragraph("<b>Amount (INR)</b>", ParagraphStyle('TRHead', parent=table_head_style, alignment=2))
+            ],
+            [
+                Paragraph(f"<b>{vendor}</b>" + (f"<br/><font color='#64748b' size=7.5><i>Note: {notes}</i></font>" if notes else ""), table_cell_style),
+                Paragraph(category, table_cell_style),
+                Paragraph(txn_type.upper(), table_cell_style),
+                Paragraph(f"Rs. {amount:,.2f}", table_amt_style)
+            ]
+        ]
+        item_table = Table(item_data, colWidths=[220, 100, 90, 110])
+        item_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#4338ca')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('BACKGROUND', (0,1), (-1,1), colors.HexColor('#f8fafc')),
+            ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#e2e8f0')),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+            ('PADDING', (0,0), (-1,-1), 8),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        story.append(item_table)
+        story.append(Spacer(1, 15))
+
+        # 4. Total Outlay Box
+        total_data = [
+            [
+                Paragraph(f"Total {'Received' if is_income else 'Outlay'}:", total_lbl_style),
+                Paragraph(f"Rs. {amount:,.2f}", total_val_style)
+            ]
+        ]
+        total_table = Table(total_data, colWidths=[120, 140])
+        total_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+            ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#e2e8f0')),
+            ('PADDING', (0,0), (-1,-1), 10),
+            ('ALIGN', (0,0), (0,0), 'LEFT'),
+            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+        ]))
+        
+        wrapper_table = Table([[Paragraph("", styles['Normal']), total_table]], colWidths=[260, 260])
+        wrapper_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+        ]))
+        story.append(wrapper_table)
+        story.append(Spacer(1, 15))
+
+        # 5. Outcome Badge if present
+        if outcome:
+            outcome_data = [[Paragraph(f"<b>Decision Outcome Label:</b> {outcome}", ParagraphStyle('OutStyle', parent=styles['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor('#3730a3')))]]
+            outcome_table = Table(outcome_data, colWidths=[520])
+            outcome_table.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#eef2ff')),
+                ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#c7d2fe')),
+                ('PADDING', (0,0), (-1,-1), 8),
+            ]))
+            story.append(outcome_table)
+            story.append(Spacer(1, 25))
+        else:
+            story.append(Spacer(1, 35))
+
+        # 6. Footer
+        story.append(HRFlowable(width="100%", thickness=0.75, color=colors.HexColor('#e2e8f0'), spaceAfter=10))
+        story.append(Paragraph(f"Generated automatically by FinSense Financial Operating System on {datetime.today().strftime('%B %d, %Y')}.<br/>This authentic digital PDF document serves as an offline verifiable financial record.", footer_style))
+
+        doc.build(story)
+        buffer.seek(0)
+        pdf_bytes = buffer.getvalue()
+
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={
+                "Content-Type": "application/pdf",
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "public, max-age=3600"
+            }
+        )
+    except Exception as e:
+        print(f"[API Invoice PDF Error] Failed to generate PDF for txn #{txn_id}: {e}")
+        return jsonify({"error": f"Failed to generate invoice PDF: {str(e)}"}), 500
+
+
 @app.route("/api/transactions/deduplicate", methods=["POST"])
 def deduplicate_transactions():
     """
