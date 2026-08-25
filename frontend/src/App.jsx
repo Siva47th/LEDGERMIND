@@ -383,10 +383,10 @@ function App() {
         return match;
       });
 
-      // 7. Translate common English term markers in response
-      clean = clean.replace(/\bRecommended\b/gi, 'பரிந்துரைக்கப்படுகிறது');
-      clean = clean.replace(/\bProceed with Caution\b/gi, 'எச்சரிக்கையுடன் தொடரவும்');
+      // 7. Translate common English term markers in response (longer phrases first!)
       clean = clean.replace(/\bNot Recommended\b/gi, 'பரிந்துரைக்கப்படவில்லை');
+      clean = clean.replace(/\bProceed with Caution\b/gi, 'எச்சரிக்கையுடன் தொடரவும்');
+      clean = clean.replace(/\bRecommended\b/gi, 'பரிந்துரைக்கப்படுகிறது');
 
       // 8. Strip any remaining English words so speech audio is 100% pure Tamil
       clean = clean.replace(/\b[A-Za-z]{2,}\b/g, '');
@@ -424,7 +424,16 @@ function App() {
     if (!advisorResult) return;
 
     const isTamil = advisorLang === 'ta' || /[\u0B80-\u0BFF]/.test(advisorResult.explanation || '');
-    const rawText = `${advisorResult.verdict}. ${advisorResult.explanation} ${advisorResult.suggested_action || ''}`;
+    
+    // Explicit Tamil verdict translation to prevent any English collision
+    const verdictTa = advisorResult.verdict === 'Recommended' 
+      ? 'பரிந்துரைக்கப்படுகிறது' 
+      : advisorResult.verdict === 'Proceed with Caution' 
+      ? 'எச்சரிக்கையுடன் தொடரவும்' 
+      : 'பரிந்துரைக்கப்படவில்லை';
+    
+    const verdictPrefix = isTamil ? verdictTa : advisorResult.verdict;
+    const rawText = `${verdictPrefix}. ${advisorResult.explanation} ${advisorResult.suggested_action || ''}`;
     const textToSpeak = cleanTextForTTS(rawText, isTamil);
 
     if (!textToSpeak) return;
