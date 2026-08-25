@@ -150,6 +150,7 @@ function App() {
   const [advisorLang, setAdvisorLang] = useState('en'); // 'en' | 'ta'
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const currentAudioRef = useRef(null);
 
   const handleAdvisorSubmit = async (queryText) => {
     const q = queryText || advisorQuery;
@@ -400,21 +401,27 @@ function App() {
   };
 
   const speakRecommendation = () => {
-    if (!('speechSynthesis' in window)) {
-      alert('Text-to-Speech is not supported in this browser.');
-      return;
+    // 1. Stop any playing HTML5 Audio or WebSpeech
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      } catch (e) {
+        console.error(e);
+      }
+      currentAudioRef.current = null;
     }
 
-    // Toggle off if currently speaking
-    if (isSpeaking || window.speechSynthesis.speaking) {
+    if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
+    }
+
+    if (isSpeaking) {
       setIsSpeaking(false);
       return;
     }
 
     if (!advisorResult) return;
-
-    window.speechSynthesis.cancel();
 
     const isTamil = advisorLang === 'ta' || /[\u0B80-\u0BFF]/.test(advisorResult.explanation || '');
     const rawText = `${advisorResult.verdict}. ${advisorResult.explanation} ${advisorResult.suggested_action || ''}`;
@@ -422,12 +429,16 @@ function App() {
 
     if (!textToSpeak) return;
 
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utterance.lang = isTamil ? 'ta-IN' : 'en-US';
-    utterance.rate = 0.9;
-    utterance.pitch = 1.0;
+    // WebSpeech Fallback
+    const fallbackWebSpeech = () => {
+      if (!('speechSynthesis' in window)) {
+        setIsSpeaking(false);
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(textToSpeak);
+      utterance.lang = isTamil ? 'ta-IN' : 'en-US';
+      utterance.rate = 0.9;
 
-    const getVoicesAndSpeak = () => {
       const voices = window.speechSynthesis.getVoices();
       if (isTamil && voices.length > 0) {
         const taVoice = voices.find(v => 
@@ -437,29 +448,67 @@ function App() {
           v.name.toLowerCase().includes('valluvar') ||
           v.name.toLowerCase().includes('india')
         );
-        if (taVoice) {
-          utterance.voice = taVoice;
-        }
+        if (taVoice) utterance.voice = taVoice;
       }
 
       utterance.onstart = () => setIsSpeaking(true);
       utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = (e) => {
-        console.error("Speech synthesis error:", e);
-        setIsSpeaking(false);
-      };
-
+      utterance.onerror = () => setIsSpeaking(false);
       window.speechSynthesis.speak(utterance);
     };
 
-    if (window.speechSynthesis.getVoices().length === 0) {
-      window.speechSynthesis.onvoiceschanged = () => {
-        getVoicesAndSpeak();
-        window.speechSynthesis.onvoiceschanged = null;
+    // 2. For Tamil Mode: Use Neural Audio Player for 100% natural fluent Tamil audio
+    if (isTamil) {
+      // Chunk text into sentence parts under 180 chars
+      const parts = textToSpeak.split(/(?<=[.!?])\s+/);
+      const chunks = [];
+      let currentChunk = "";
+      parts.forEach(part => {
+        if ((currentChunk + " " + part).length > 170) {
+          if (currentChunk.trim()) chunks.push(currentChunk.trim());
+          currentChunk = part;
+        } else {
+          currentChunk += (currentChunk ? " " : "") + part;
+        }
+      });
+      if (currentChunk.trim()) chunks.push(currentChunk.trim());
+
+      if (chunks.length === 0) chunks.push(textToSpeak);
+
+      let currentIdx = 0;
+      setIsSpeaking(true);
+
+      const playNextChunk = () => {
+        if (currentIdx >= chunks.length) {
+          setIsSpeaking(false);
+          currentAudioRef.current = null;
+          return;
+        }
+
+        const chunkText = chunks[currentIdx];
+        const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunkText)}&tl=ta&client=tw-ob`;
+        const audio = new Audio(audioUrl);
+        currentAudioRef.current = audio;
+
+        audio.onended = () => {
+          currentIdx++;
+          playNextChunk();
+        };
+
+        audio.onerror = () => {
+          console.warn("Neural audio playback notice, falling back to WebSpeech");
+          fallbackWebSpeech();
+        };
+
+        audio.play().catch(err => {
+          console.warn("Audio autoplay blocked/failed, using fallback:", err);
+          fallbackWebSpeech();
+        });
       };
-      setTimeout(getVoicesAndSpeak, 100);
+
+      playNextChunk();
     } else {
-      getVoicesAndSpeak();
+      fallbackWebSpeech();
     }
   };
 
