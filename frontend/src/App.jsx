@@ -325,14 +325,30 @@ function App() {
     let clean = text;
 
     if (isTamil) {
-      // 1. Clean bracketed English (Tamil Translation) naming words for audio synthesis
+      // 1. Handle bracketed Tamil translations first:
       // e.g. "Dell India (டெல் கணினி நிறுவனம்)" -> "டெல் கணினி நிறுவனம்"
-      clean = clean.replace(/[A-Za-z0-9\s,&.'-]+\s*\(([\u0B80-\u0BFF\s,&.'-]+)\)/g, '$1');
-      
-      // e.g. "[Shopping (பொருட்கள் வாங்குதல்)]" or "[Education (கல்வி)]" -> "பொருட்கள் வாங்குதல்" / "கல்வி"
-      clean = clean.replace(/\[\s*(?:[A-Za-z0-9\s,&.'-]+\s*\()?([\u0B80-\u0BFF\s,&.'-]+)\)?\s*\]/g, '$1');
+      clean = clean.replace(/[A-Za-z0-9\s,&.'"-]+\s*\(([\u0B80-\u0BFF\s,&.'"-]+)\)/g, ' $1 ');
 
-      // 2. Convert patterns like ₹65,000-க்கு / 65,000-க்கு / Rs. 65,000-க்கு
+      // e.g. "[Shopping (பொருட்கள் வாங்குதல்)]" or "[Education (கல்வி)]" or "[கல்வி]" -> "பொருட்கள் வாங்குதல்" / "கல்வி"
+      clean = clean.replace(/\[\s*(?:[A-Za-z0-9\s,&.'"-]+\s*\()?([\u0B80-\u0BFF\s,&.'"-]+)\)?\s*\]/g, ' $1 ');
+      clean = clean.replace(/\[\s*[A-Za-z0-9\s,&.'"-]+\s*\]/g, ' ');
+
+      // 2. Comprehensive English to Tamil phonetic mapping for any standalone English vendor/case names
+      clean = clean.replace(/Anna University Fees/gi, 'அண்ணா பல்கலைக்கழக கட்டணம்');
+      clean = clean.replace(/Dell India/gi, 'டெல் கணினி நிறுவனம்');
+      clean = clean.replace(/Croma Electronics/gi, 'க்ரோமா எலக்ட்ரானிக்ஸ்');
+      clean = clean.replace(/IFET College/gi, 'ஐஎஃப்ஈடி கல்லூரி');
+      clean = clean.replace(/Google Workspace/gi, 'கூகிள் மென்பொருள்');
+      clean = clean.replace(/Logitech India/gi, 'லாஜிடெக் நிறுவனம்');
+      clean = clean.replace(/Apex Enterprises/gi, 'ஏபெக்ஸ் நிறுவனம்');
+      clean = clean.replace(/Education/gi, 'கல்வி');
+      clean = clean.replace(/Shopping/gi, 'பொருட்கள் வாங்குதல்');
+      clean = clean.replace(/Software/gi, 'மென்பொருள்');
+      clean = clean.replace(/Financial/gi, 'நிதி சேவை');
+      clean = clean.replace(/HEALTHY/gi, 'ஆரோக்கியமான நிதி நிலை');
+      clean = clean.replace(/STRAINED/gi, 'ரொக்க நெருக்கடி நிலை');
+
+      // 3. Convert patterns like ₹65,000-க்கு / 65,000-க்கு / Rs. 65,000-க்கு
       clean = clean.replace(/(?:Rs\.|Rs|₹|ரூ\.|ரூ)?\s*([\d,]+(?:\.\d+)?)\s*-\s*க்கு/gi, (match, p1) => {
         const num = parseFloat(p1.replace(/,/g, ''));
         if (!isNaN(num)) {
@@ -342,7 +358,7 @@ function App() {
         return match;
       });
 
-      // 3. Convert currency symbols (Rs., ₹, ரூ., ரூ) followed by amounts
+      // 4. Convert currency symbols (Rs., ₹, ரூ., ரூ) followed by amounts
       clean = clean.replace(/(?:Rs\.|Rs|₹|ரூ\.|ரூ)\s*([\d,]+(?:\.\d+)?)/gi, (match, p1) => {
         const num = parseFloat(p1.replace(/,/g, ''));
         if (!isNaN(num)) {
@@ -352,11 +368,11 @@ function App() {
         return `ரூபாய் ${p1}`;
       });
 
-      // 4. Remove stray hyphens before Tamil words
+      // 5. Remove stray hyphens and brackets
       clean = clean.replace(/-\s*([அ-ஹா-ௌ்]+)/g, ' $1');
-      clean = clean.replace(/-/g, ' ');
+      clean = clean.replace(/[-()[\]']/g, ' ');
 
-      // 5. Replace standalone numeric figures with accurate Tamil words
+      // 6. Replace standalone numeric figures with accurate Tamil words
       clean = clean.replace(/\b\d+(?:,\d+)*(?:\.\d+)?\b/g, (match) => {
         const num = parseFloat(match.replace(/,/g, ''));
         if (!isNaN(num)) {
@@ -366,12 +382,12 @@ function App() {
         return match;
       });
 
-      // 6. Translate common English term markers in response
+      // 7. Translate common English term markers in response
       clean = clean.replace(/\bRecommended\b/gi, 'பரிந்துரைக்கப்படுகிறது');
       clean = clean.replace(/\bProceed with Caution\b/gi, 'எச்சரிக்கையுடன் தொடரவும்');
       clean = clean.replace(/\bNot Recommended\b/gi, 'பரிந்துரைக்கப்படவில்லை');
 
-      // 7. Strip any leftover standalone English words so browser Tamil voice speaks 100% fluent Tamil audio
+      // 8. Strip any remaining English words so speech audio is 100% pure Tamil
       clean = clean.replace(/\b[A-Za-z]{2,}\b/g, '');
     } else {
       // English TTS cleanup
@@ -389,7 +405,8 @@ function App() {
       return;
     }
 
-    if (isSpeaking) {
+    // Toggle off if currently speaking
+    if (isSpeaking || window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
       return;
@@ -397,28 +414,53 @@ function App() {
 
     if (!advisorResult) return;
 
+    window.speechSynthesis.cancel();
+
     const isTamil = advisorLang === 'ta' || /[\u0B80-\u0BFF]/.test(advisorResult.explanation || '');
     const rawText = `${advisorResult.verdict}. ${advisorResult.explanation} ${advisorResult.suggested_action || ''}`;
     const textToSpeak = cleanTextForTTS(rawText, isTamil);
 
+    if (!textToSpeak) return;
+
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utterance.lang = isTamil ? 'ta-IN' : 'en-US';
-    utterance.rate = 0.95;
+    utterance.rate = 0.9;
+    utterance.pitch = 1.0;
 
-    // Explicitly select official Tamil voice if installed in system browser
-    if (isTamil) {
+    const getVoicesAndSpeak = () => {
       const voices = window.speechSynthesis.getVoices();
-      const taVoice = voices.find(v => v.lang.includes('ta') || v.name.toLowerCase().includes('tamil') || v.name.toLowerCase().includes('heera') || v.name.toLowerCase().includes('valluvar'));
-      if (taVoice) {
-        utterance.voice = taVoice;
+      if (isTamil && voices.length > 0) {
+        const taVoice = voices.find(v => 
+          v.lang.toLowerCase().includes('ta') || 
+          v.name.toLowerCase().includes('tamil') || 
+          v.name.toLowerCase().includes('heera') || 
+          v.name.toLowerCase().includes('valluvar') ||
+          v.name.toLowerCase().includes('india')
+        );
+        if (taVoice) {
+          utterance.voice = taVoice;
+        }
       }
+
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = (e) => {
+        console.error("Speech synthesis error:", e);
+        setIsSpeaking(false);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    };
+
+    if (window.speechSynthesis.getVoices().length === 0) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        getVoicesAndSpeak();
+        window.speechSynthesis.onvoiceschanged = null;
+      };
+      setTimeout(getVoicesAndSpeak, 100);
+    } else {
+      getVoicesAndSpeak();
     }
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
   };
 
   // Case Memory Viewer State
