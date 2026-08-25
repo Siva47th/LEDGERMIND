@@ -32,6 +32,8 @@ import {
   Globe,
   Download
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import './App.css';
 
@@ -758,114 +760,144 @@ function App() {
   };
 
   const downloadSingleInvoice = (txn) => {
-    const isIncome = txn.transaction_type === 'income' || txn.transaction_type === 'return_in';
-    const invoiceNumber = `INV-${String(txn.id).padStart(5, '0')}`;
-    const invoiceTitle = isIncome ? 'TAX INVOICE / RECEIPT' : 'EXPENSE VOUCHER / BILL';
-    const formattedAmount = `Rs. ${Number(txn.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+    try {
+      const doc = new jsPDF();
+      const isIncome = txn.transaction_type === 'income' || txn.transaction_type === 'return_in';
+      const invoiceNumber = `INV-${String(txn.id).padStart(5, '0')}`;
+      const docTitle = isIncome ? 'TAX INVOICE / RECEIPT' : 'EXPENSE VOUCHER / BILL';
+      const formattedAmount = `Rs. ${Number(txn.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
-    const invoiceHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>${invoiceNumber} - ${txn.vendor_or_client}</title>
-  <style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8fafc; margin: 0; padding: 40px; color: #1e293b; }
-    .invoice-card { max-width: 750px; margin: 0 auto; background: #ffffff; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); padding: 40px; border: 1px solid #e2e8f0; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #f1f5f9; padding-bottom: 25px; }
-    .brand-title { font-size: 28px; font-weight: 800; color: #4338ca; letter-spacing: -0.5px; margin: 0; }
-    .brand-sub { font-size: 13px; color: #64748b; margin-top: 4px; font-weight: 600; }
-    .invoice-badge { background: ${isIncome ? '#dcfce7' : '#fee2e2'}; color: ${isIncome ? '#166534' : '#b91c1c'}; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; display: inline-block; }
-    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 30px 0; }
-    .meta-block h4 { margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
-    .meta-block p { margin: 0; font-size: 16px; font-weight: 700; color: #0f172a; }
-    .table-box { width: 100%; border-collapse: collapse; margin: 25px 0; }
-    .table-box th { background: #f8fafc; text-align: left; padding: 12px 16px; font-size: 13px; color: #475569; border-bottom: 2px solid #e2e8f0; }
-    .table-box td { padding: 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-    .total-section { display: flex; justify-content: flex-end; margin-top: 20px; }
-    .total-box { width: 280px; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; }
-    .total-row { display: flex; justify-content: space-between; font-size: 16px; font-weight: 800; color: #0f172a; }
-    .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }
-    @media print { body { background: #fff; padding: 0; } .invoice-card { box-shadow: none; border: none; padding: 20px; } }
-  </style>
-</head>
-<body>
-  <div class="invoice-card">
-    <div class="header">
-      <div>
-        <h1 class="brand-title">FinSense AI</h1>
-        <div class="brand-sub">Intelligent Financial Operating System</div>
-      </div>
-      <div style="text-align: right;">
-        <span class="invoice-badge">${invoiceTitle}</span>
-        <div style="font-size: 18px; font-weight: 800; margin-top: 8px; color: #0f172a;">${invoiceNumber}</div>
-      </div>
-    </div>
+      // 1. Header Banner
+      doc.setFillColor(67, 56, 202); // Deep Indigo (#4338ca)
+      doc.rect(0, 0, 210, 32, 'F');
 
-    <div class="meta-grid">
-      <div class="meta-block">
-        <h4>${isIncome ? 'Received From (Client)' : 'Paid To (Vendor / Entity)'}</h4>
-        <p>${txn.vendor_or_client}</p>
-        <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Category: <strong>${txn.category}</strong></div>
-      </div>
-      <div class="meta-block" style="text-align: right;">
-        <h4>Transaction Date</h4>
-        <p>${txn.date}</p>
-        <div style="font-size: 13px; color: #64748b; margin-top: 4px;">System Health: <strong>${txn.outcome_label || 'Healthy'}</strong></div>
-      </div>
-    </div>
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.setFont('helvetica', 'bold');
+      doc.text('FinSense AI', 14, 18);
 
-    <table class="table-box">
-      <thead>
-        <tr>
-          <th>Description / Item</th>
-          <th>Category</th>
-          <th>Type</th>
-          <th style="text-align: right;">Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>
-            <strong>${txn.vendor_or_client}</strong>
-            ${txn.user_notes ? `<br><span style="font-size: 12px; color: #64748b; font-style: italic;">Note: ${txn.user_notes}</span>` : ''}
-          </td>
-          <td>${txn.category}</td>
-          <td><span style="font-weight: 700; color: ${isIncome ? '#166534' : '#b91c1c'};">${txn.transaction_type.toUpperCase()}</span></td>
-          <td style="text-align: right; font-weight: 800; font-size: 16px;">${formattedAmount}</td>
-        </tr>
-      </tbody>
-    </table>
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Intelligent Financial Operating System', 14, 25);
 
-    <div class="total-section">
-      <div class="total-box">
-        <div class="total-row">
-          <span>Total ${isIncome ? 'Received' : 'Outlay'}:</span>
-          <span style="color: ${isIncome ? '#166534' : '#b91c1c'};">${formattedAmount}</span>
-        </div>
-      </div>
-    </div>
+      // Right header title & Invoice ID
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(docTitle, 196, 16, { align: 'right' });
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(invoiceNumber, 196, 24, { align: 'right' });
 
-    ${txn.user_outcome ? `
-    <div style="margin-top: 20px; background: #eef2ff; padding: 12px 16px; border-radius: 8px; border: 1px solid #c7d2fe; font-size: 13px; color: #3730a3;">
-      <strong>Decision Label:</strong> ${txn.user_outcome}
-    </div>` : ''}
+      // 2. Metadata Box
+      doc.setDrawColor(226, 232, 240);
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, 40, 182, 34, 3, 3, 'FD');
 
-    <div class="footer">
-      Generated automatically by FinSense Financial Intelligence Suite on ${new Date().toLocaleDateString()}.<br>
-      This document serves as an authentic digital audit record.
-    </div>
-  </div>
-</body>
-</html>`;
+      doc.setTextColor(100, 116, 139);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text(isIncome ? 'RECEIVED FROM (CLIENT)' : 'PAID TO (VENDOR / ENTITY)', 20, 48);
+      doc.text('TRANSACTION DATE', 120, 48);
 
-    const blob = new Blob([invoiceHTML], { type: 'text/html;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `FinSense_Invoice_${invoiceNumber}_${txn.vendor_or_client.replace(/[^a-zA-Z0-9]/g, '_')}.html`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.text(txn.vendor_or_client || '—', 20, 56);
+      doc.text(txn.date || '—', 120, 56);
+
+      doc.setTextColor(71, 85, 105);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Category: ${txn.category || 'General'}`, 20, 64);
+      doc.text(`System Health: ${txn.outcome_label || 'Healthy'}`, 120, 64);
+
+      // 3. Item Table
+      const tableRows = [
+        [
+          txn.vendor_or_client,
+          txn.category,
+          txn.transaction_type.toUpperCase(),
+          formattedAmount
+        ]
+      ];
+
+      autoTable(doc, {
+        startY: 82,
+        head: [['Description / Entity', 'Category', 'Transaction Type', 'Amount (INR)']],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: {
+          fillColor: [79, 70, 229],
+          textColor: 255,
+          fontStyle: 'bold',
+          fontSize: 10
+        },
+        bodyStyles: {
+          fontSize: 10,
+          textColor: [15, 23, 42]
+        },
+        columnStyles: {
+          0: { cellWidth: 80 },
+          1: { cellWidth: 35 },
+          2: { cellWidth: 35 },
+          3: { cellWidth: 32, halign: 'right', fontStyle: 'bold' }
+        }
+      });
+
+      const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : 120;
+
+      // 4. Total Outlay Summary Box
+      doc.setDrawColor(226, 232, 240);
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(114, finalY + 10, 82, 26, 3, 3, 'FD');
+
+      doc.setFontSize(10);
+      doc.setTextColor(71, 85, 105);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Total ${isIncome ? 'Received' : 'Outlay'}:`, 120, finalY + 23);
+
+      doc.setFontSize(12);
+      doc.setTextColor(isIncome ? 22 : 185, isIncome ? 101 : 28, isIncome ? 52 : 28);
+      doc.text(formattedAmount, 190, finalY + 23, { align: 'right' });
+
+      // 5. Notes & Decision Outcome if present
+      let currentY = finalY + 45;
+      if (txn.user_notes || txn.user_outcome) {
+        doc.setFillColor(238, 242, 255);
+        doc.setDrawColor(199, 210, 254);
+        doc.roundedRect(14, currentY, 182, 22, 2, 2, 'FD');
+
+        doc.setFontSize(9);
+        doc.setTextColor(67, 56, 202);
+        doc.setFont('helvetica', 'bold');
+        if (txn.user_outcome) {
+          doc.text(`Decision Outcome Label: ${txn.user_outcome}`, 20, currentY + 9);
+        }
+        if (txn.user_notes) {
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(71, 85, 105);
+          doc.text(`Audit Note: "${txn.user_notes}"`, 20, currentY + (txn.user_outcome ? 16 : 12));
+        }
+        currentY += 30;
+      }
+
+      // 6. Security Footer
+      doc.setDrawColor(226, 232, 240);
+      doc.line(14, 270, 196, 270);
+
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generated automatically by FinSense Financial Operating System on ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 105, 276, { align: 'center' });
+      doc.text('This authentic digital PDF document serves as an offline verifiable financial record.', 105, 281, { align: 'center' });
+
+      // 7. Save and Download as .pdf
+      const fileName = `FinSense_Invoice_${invoiceNumber}_${txn.vendor_or_client.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      doc.save(fileName);
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+      alert('Error generating PDF invoice. Please try again.');
+    }
   };
 
   const saveOutcomeLabel = async (txnId, newOutcome) => {
@@ -1640,7 +1672,7 @@ function App() {
                                   }}
                                 >
                                   <Download size={13} />
-                                  <span>Invoice</span>
+                                  <span>PDF</span>
                                 </button>
 
                                 <button
