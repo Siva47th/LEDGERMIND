@@ -761,68 +761,72 @@ function App() {
 
   const downloadSingleInvoice = (txn) => {
     try {
-      const doc = new jsPDF();
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
       const isIncome = txn.transaction_type === 'income' || txn.transaction_type === 'return_in';
       const invoiceNumber = `INV-${String(txn.id).padStart(5, '0')}`;
       const docTitle = isIncome ? 'TAX INVOICE / RECEIPT' : 'EXPENSE VOUCHER / BILL';
       const formattedAmount = `Rs. ${Number(txn.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
       // 1. Header Banner
-      doc.setFillColor(67, 56, 202); // Deep Indigo (#4338ca)
-      doc.rect(0, 0, 210, 32, 'F');
+      doc.setFillColor(67, 56, 202); // Deep Indigo
+      doc.rect(0, 0, 210, 30, 'F');
 
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(22);
+      doc.setFontSize(20);
       doc.setFont('helvetica', 'bold');
-      doc.text('FinSense AI', 14, 18);
+      doc.text('FinSense AI', 14, 16);
 
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
-      doc.text('Intelligent Financial Operating System', 14, 25);
+      doc.text('Intelligent Financial Operating System', 14, 23);
 
       // Right header title & Invoice ID
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text(docTitle, 196, 16, { align: 'right' });
       doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(docTitle, 196, 14, { align: 'right' });
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
-      doc.text(invoiceNumber, 196, 24, { align: 'right' });
+      doc.text(invoiceNumber, 196, 22, { align: 'right' });
 
       // 2. Metadata Box
       doc.setDrawColor(226, 232, 240);
       doc.setFillColor(248, 250, 252);
-      doc.roundedRect(14, 40, 182, 34, 3, 3, 'FD');
+      doc.roundedRect(14, 38, 182, 32, 3, 3, 'FD');
 
       doc.setTextColor(100, 116, 139);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'bold');
-      doc.text(isIncome ? 'RECEIVED FROM (CLIENT)' : 'PAID TO (VENDOR / ENTITY)', 20, 48);
-      doc.text('TRANSACTION DATE', 120, 48);
+      doc.text(isIncome ? 'RECEIVED FROM (CLIENT)' : 'PAID TO (VENDOR / ENTITY)', 20, 46);
+      doc.text('TRANSACTION DATE', 120, 46);
 
       doc.setTextColor(15, 23, 42);
-      doc.setFontSize(13);
+      doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-      doc.text(txn.vendor_or_client || '—', 20, 56);
-      doc.text(txn.date || '—', 120, 56);
+      doc.text(String(txn.vendor_or_client || '—'), 20, 53);
+      doc.text(String(txn.date || '—'), 120, 53);
 
       doc.setTextColor(71, 85, 105);
-      doc.setFontSize(9);
+      doc.setFontSize(8.5);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Category: ${txn.category || 'General'}`, 20, 64);
-      doc.text(`System Health: ${txn.outcome_label || 'Healthy'}`, 120, 64);
+      doc.text(`Category: ${txn.category || 'General'}`, 20, 62);
+      doc.text(`System Health: ${txn.outcome_label || 'Healthy'}`, 120, 62);
 
       // 3. Item Table
       const tableRows = [
         [
-          txn.vendor_or_client,
-          txn.category,
-          txn.transaction_type.toUpperCase(),
+          String(txn.vendor_or_client || ''),
+          String(txn.category || ''),
+          String(txn.transaction_type || '').toUpperCase(),
           formattedAmount
         ]
       ];
 
       autoTable(doc, {
-        startY: 82,
+        startY: 78,
         head: [['Description / Entity', 'Category', 'Transaction Type', 'Amount (INR)']],
         body: tableRows,
         theme: 'striped',
@@ -830,10 +834,10 @@ function App() {
           fillColor: [79, 70, 229],
           textColor: 255,
           fontStyle: 'bold',
-          fontSize: 10
+          fontSize: 9.5
         },
         bodyStyles: {
-          fontSize: 10,
+          fontSize: 9.5,
           textColor: [15, 23, 42]
         },
         columnStyles: {
@@ -844,41 +848,40 @@ function App() {
         }
       });
 
-      const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : 120;
+      const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : 110;
 
       // 4. Total Outlay Summary Box
       doc.setDrawColor(226, 232, 240);
       doc.setFillColor(248, 250, 252);
-      doc.roundedRect(114, finalY + 10, 82, 26, 3, 3, 'FD');
+      doc.roundedRect(114, finalY + 8, 82, 22, 3, 3, 'FD');
 
-      doc.setFontSize(10);
+      doc.setFontSize(9.5);
       doc.setTextColor(71, 85, 105);
       doc.setFont('helvetica', 'bold');
-      doc.text(`Total ${isIncome ? 'Received' : 'Outlay'}:`, 120, finalY + 23);
+      doc.text(`Total ${isIncome ? 'Received' : 'Outlay'}:`, 120, finalY + 20);
 
-      doc.setFontSize(12);
+      doc.setFontSize(11);
       doc.setTextColor(isIncome ? 22 : 185, isIncome ? 101 : 28, isIncome ? 52 : 28);
-      doc.text(formattedAmount, 190, finalY + 23, { align: 'right' });
+      doc.text(formattedAmount, 190, finalY + 20, { align: 'right' });
 
       // 5. Notes & Decision Outcome if present
-      let currentY = finalY + 45;
+      let currentY = finalY + 36;
       if (txn.user_notes || txn.user_outcome) {
         doc.setFillColor(238, 242, 255);
         doc.setDrawColor(199, 210, 254);
-        doc.roundedRect(14, currentY, 182, 22, 2, 2, 'FD');
+        doc.roundedRect(14, currentY, 182, 20, 2, 2, 'FD');
 
-        doc.setFontSize(9);
+        doc.setFontSize(8.5);
         doc.setTextColor(67, 56, 202);
         doc.setFont('helvetica', 'bold');
         if (txn.user_outcome) {
-          doc.text(`Decision Outcome Label: ${txn.user_outcome}`, 20, currentY + 9);
+          doc.text(`Decision Outcome Label: ${txn.user_outcome}`, 20, currentY + 8);
         }
         if (txn.user_notes) {
           doc.setFont('helvetica', 'italic');
           doc.setTextColor(71, 85, 105);
-          doc.text(`Audit Note: "${txn.user_notes}"`, 20, currentY + (txn.user_outcome ? 16 : 12));
+          doc.text(`Audit Note: "${txn.user_notes}"`, 20, currentY + (txn.user_outcome ? 15 : 10));
         }
-        currentY += 30;
       }
 
       // 6. Security Footer
@@ -888,12 +891,24 @@ function App() {
       doc.setFontSize(8);
       doc.setTextColor(148, 163, 184);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Generated automatically by FinSense Financial Operating System on ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 105, 276, { align: 'center' });
+      doc.text(`Generated automatically by FinSense Financial Operating System on ${new Date().toLocaleDateString()}`, 105, 276, { align: 'center' });
       doc.text('This authentic digital PDF document serves as an offline verifiable financial record.', 105, 281, { align: 'center' });
 
-      // 7. Save and Download as .pdf
-      const fileName = `FinSense_Invoice_${invoiceNumber}_${txn.vendor_or_client.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-      doc.save(fileName);
+      // 7. Save and Download true .pdf file
+      const cleanVendor = String(txn.vendor_or_client || 'Record').replace(/[^a-zA-Z0-9]/g, '_');
+      const filename = `FinSense_Invoice_${invoiceNumber}_${cleanVendor}.pdf`;
+
+      const pdfBlob = doc.output('blob');
+      const blobWithMime = new Blob([pdfBlob], { type: 'application/pdf' });
+      const downloadUrl = URL.createObjectURL(blobWithMime);
+
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
     } catch (err) {
       console.error('Failed to generate PDF:', err);
       alert('Error generating PDF invoice. Please try again.');
