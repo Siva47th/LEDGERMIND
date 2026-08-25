@@ -31,7 +31,7 @@ load_dotenv()
 
 app = Flask(__name__)
 # Enable CORS for frontend connectivity
-CORS(app)
+CORS(app, expose_headers=["Content-Disposition"])
 
 DB_NAME = "finsense.db"
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), DB_NAME)
@@ -773,7 +773,8 @@ def download_invoice_pdf(txn_id):
             mimetype="application/pdf",
             headers={
                 "Content-Type": "application/pdf",
-                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Disposition": f'attachment; filename="{filename}"; filename*=UTF-8\'\'{filename}',
+                "Access-Control-Expose-Headers": "Content-Disposition",
                 "Cache-Control": "public, max-age=3600"
             }
         )

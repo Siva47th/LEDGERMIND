@@ -759,149 +759,34 @@ function App() {
     document.body.removeChild(link);
   };
 
-  const downloadSingleInvoice = (txn) => {
+  const downloadSingleInvoice = async (txn) => {
     try {
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const isIncome = txn.transaction_type === 'income' || txn.transaction_type === 'return_in';
       const invoiceNumber = `INV-${String(txn.id).padStart(5, '0')}`;
-      const docTitle = isIncome ? 'TAX INVOICE / RECEIPT' : 'EXPENSE VOUCHER / BILL';
-      const formattedAmount = `Rs. ${Number(txn.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
       const cleanVendor = String(txn.vendor_or_client || 'Record').replace(/[^a-zA-Z0-9]/g, '_');
       const filename = `FinSense_Invoice_${invoiceNumber}_${cleanVendor}.pdf`;
 
-      // 1. Header Banner (Deep Indigo #4338ca)
-      doc.setFillColor(67, 56, 202);
-      doc.rect(0, 0, 210, 30, 'F');
+      const res = await fetch(`${API_BASE}/invoices/${txn.id}/pdf`);
+      if (!res.ok) throw new Error('PDF fetch failed');
+      const blob = await res.blob();
 
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(20);
-      doc.setFont('helvetica', 'bold');
-      doc.text('FinSense AI', 14, 16);
+      // Create an authentic application/pdf File object with metadata for Chrome & Edge
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      const fileUrl = window.URL.createObjectURL(file);
 
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Intelligent Financial Operating System', 14, 23);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = fileUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
 
-      // Right Header
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text(docTitle, 196, 14, { align: 'right' });
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.text(invoiceNumber, 196, 22, { align: 'right' });
-
-      // 2. Metadata Box
-      doc.setDrawColor(226, 232, 240);
-      doc.setFillColor(248, 250, 252);
-      doc.roundedRect(14, 38, 182, 32, 3, 3, 'FD');
-
-      doc.setTextColor(100, 116, 139);
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.text(isIncome ? 'RECEIVED FROM (CLIENT)' : 'PAID TO (VENDOR / ENTITY)', 20, 46);
-      doc.text('TRANSACTION DATE', 120, 46);
-
-      doc.setTextColor(15, 23, 42);
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text(String(txn.vendor_or_client || '—'), 20, 53);
-      doc.text(String(txn.date || '—'), 120, 53);
-
-      doc.setTextColor(71, 85, 105);
-      doc.setFontSize(8.5);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Category: ${txn.category || 'General'}`, 20, 62);
-      doc.text(`System Health: ${txn.outcome_label || 'Healthy'}`, 120, 62);
-
-      // 3. Item Table
-      const tableRows = [
-        [
-          String(txn.vendor_or_client || ''),
-          String(txn.category || ''),
-          String(txn.transaction_type || '').toUpperCase(),
-          formattedAmount
-        ]
-      ];
-
-      autoTable(doc, {
-        startY: 78,
-        head: [['Description / Entity', 'Category', 'Transaction Type', 'Amount (INR)']],
-        body: tableRows,
-        theme: 'striped',
-        headStyles: {
-          fillColor: [79, 70, 229],
-          textColor: 255,
-          fontStyle: 'bold',
-          fontSize: 9.5
-        },
-        bodyStyles: {
-          fontSize: 9.5,
-          textColor: [15, 23, 42]
-        },
-        columnStyles: {
-          0: { cellWidth: 80 },
-          1: { cellWidth: 35 },
-          2: { cellWidth: 35 },
-          3: { cellWidth: 32, halign: 'right', fontStyle: 'bold' }
-        }
-      });
-
-      const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : 110;
-
-      // 4. Total Outlay Summary Box
-      doc.setDrawColor(226, 232, 240);
-      doc.setFillColor(248, 250, 252);
-      doc.roundedRect(114, finalY + 8, 82, 22, 3, 3, 'FD');
-
-      doc.setFontSize(9.5);
-      doc.setTextColor(71, 85, 105);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Total ${isIncome ? 'Received' : 'Outlay'}:`, 120, finalY + 20);
-
-      doc.setFontSize(11);
-      doc.setTextColor(isIncome ? 22 : 185, isIncome ? 101 : 28, isIncome ? 52 : 28);
-      doc.text(formattedAmount, 190, finalY + 20, { align: 'right' });
-
-      // 5. Notes & Decision Outcome if present
-      let currentY = finalY + 36;
-      if (txn.user_notes || txn.user_outcome) {
-        doc.setFillColor(238, 242, 255);
-        doc.setDrawColor(199, 210, 254);
-        doc.roundedRect(14, currentY, 182, 20, 2, 2, 'FD');
-
-        doc.setFontSize(8.5);
-        doc.setTextColor(67, 56, 202);
-        doc.setFont('helvetica', 'bold');
-        if (txn.user_outcome) {
-          doc.text(`Decision Outcome Label: ${txn.user_outcome}`, 20, currentY + 8);
-        }
-        if (txn.user_notes) {
-          doc.setFont('helvetica', 'italic');
-          doc.setTextColor(71, 85, 105);
-          doc.text(`Audit Note: "${txn.user_notes}"`, 20, currentY + (txn.user_outcome ? 15 : 10));
-        }
-      }
-
-      // 6. Security Footer
-      doc.setDrawColor(226, 232, 240);
-      doc.line(14, 270, 196, 270);
-
-      doc.setFontSize(8);
-      doc.setTextColor(148, 163, 184);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Generated offline by FinSense Financial Operating System on ${new Date().toLocaleDateString()}`, 105, 276, { align: 'center' });
-      doc.text('This authentic digital PDF document is self-contained and verifiable offline.', 105, 281, { align: 'center' });
-
-      // 7. Pure Offline Direct PDF File Save
-      doc.save(filename);
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(fileUrl);
+      }, 1000);
     } catch (err) {
-      console.error('Failed to generate offline PDF invoice:', err);
-      alert('Error generating PDF invoice. Please try again.');
+      console.warn('Direct PDF fetch fallback:', err);
+      window.location.href = `${API_BASE}/invoices/${txn.id}/pdf`;
     }
   };
 
@@ -1649,11 +1534,8 @@ function App() {
                             </td>
                             <td style={{ textAlign: 'center' }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-                                <a
-                                  href={`${API_BASE}/invoices/${txn.id}/pdf`}
-                                  download={`FinSense_Invoice_INV-${String(txn.id).padStart(5, '0')}_${String(txn.vendor_or_client || 'Record').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                                <button
+                                  onClick={() => downloadSingleInvoice(txn)}
                                   title="Download authentic standalone offline PDF invoice"
                                   style={{
                                     background: '#e0e7ff',
@@ -1667,7 +1549,6 @@ function App() {
                                     gap: '0.3rem',
                                     fontSize: '0.75rem',
                                     fontWeight: 700,
-                                    textDecoration: 'none',
                                     boxShadow: '0 2px 5px rgba(99, 102, 241, 0.08)',
                                     transition: 'all 0.2s'
                                   }}
@@ -1682,7 +1563,7 @@ function App() {
                                 >
                                   <Download size={13} />
                                   <span>PDF</span>
-                                </a>
+                                </button>
 
                                 <button
                                   onClick={() => deleteTransaction(txn.id)}
