@@ -2092,12 +2092,16 @@ function App() {
                     <span style={{ fontSize: '0.75rem', color: '#334155', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                       <Lightbulb size={14} color="#d97706" /> Sample Queries:
                     </span>
-                    {[
+                    {(advisorLang === 'ta' ? [
+                      '1,50,000 இலிருந்து ஐஃபோன் வாங்கலாமா?',
+                      '35,000-க்கு லேப்டாப் வாங்கலாமா?',
+                      '45,000 கல்லூரி கட்டணம் செலுத்தலாமா?'
+                    ] : [
                       'Should I buy 5 new laptops for Rs. 75,000?',
                       'Can we afford Rs. 35,000 for Google Ads search marketing?',
                       'Will paying office lease rent of Rs. 45,000 strain our cash balance?',
                       'Should I purchase an Enterprise ERP software subscription for Rs. 85,000?'
-                    ].map((sample, idx) => (
+                    ]).map((sample, idx) => (
                       <button
                         key={idx}
                         onClick={() => {
@@ -2135,26 +2139,27 @@ function App() {
                 {advisorResult && (
                   <div className="fade-in">
                     {/* Top Row: Verdict Banner & Adaptive Blending Card */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
                       
                       {/* Verdict Banner Card */}
                       {(() => {
                         const isQueryTamil = advisorQuery && isTamilScript(advisorQuery);
                         return (
-                          <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '20px', border: `1px solid ${advisorResult.verdict === 'Recommended' ? '#bbf7d0' : advisorResult.verdict === 'Proceed with Caution' ? '#fde68a' : '#fca5a5'}`, background: 'rgba(255, 255, 255, 0.85)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.08)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                              <div>
+                          <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '20px', border: `1px solid ${advisorResult.verdict === 'Recommended' ? '#bbf7d0' : advisorResult.verdict === 'Proceed with Caution' ? '#fde68a' : '#fca5a5'}`, background: 'rgba(255, 255, 255, 0.85)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.08)', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                              <div style={{ minWidth: '180px', flex: '1 1 auto' }}>
                                 <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                   {isQueryTamil ? 'செயற்கை நுண்ணறிவு பரிந்துரை' : 'AI Recommendation'}
                                 </span>
                                 <h4 style={{ 
                                   margin: '0.25rem 0 0 0', 
-                                  fontSize: '1.6rem', 
+                                  fontSize: '1.5rem', 
                                   fontWeight: 800, 
                                   color: advisorResult.verdict === 'Recommended' ? '#166534' : advisorResult.verdict === 'Proceed with Caution' ? '#b45309' : '#b91c1c',
                                   display: 'flex',
                                   alignItems: 'center',
-                                  gap: '0.5rem'
+                                  gap: '0.5rem',
+                                  flexWrap: 'wrap'
                                 }}>
                                   {advisorResult.verdict === 'Recommended' && <CheckCircle size={24} color="#166534" />}
                                   {advisorResult.verdict === 'Proceed with Caution' && <ShieldAlert size={24} color="#b45309" />}
@@ -2163,7 +2168,7 @@ function App() {
                                 </h4>
                               </div>
 
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                                 {/* Read Aloud Text-to-Speech Button */}
                                 <button
                                   type="button"
@@ -2175,22 +2180,22 @@ function App() {
                                     border: '1px solid rgba(255, 255, 255, 0.4)',
                                     color: '#ffffff',
                                     borderRadius: '25px',
-                                    padding: '0.5rem 1rem',
-                                    fontSize: '0.8rem',
+                                    padding: '0.45rem 0.85rem',
+                                    fontSize: '0.75rem',
                                     fontWeight: 800,
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.4rem',
+                                    gap: '0.35rem',
                                     boxShadow: isSpeaking 
                                       ? '0 4px 16px rgba(239, 68, 68, 0.4)' 
                                       : '0 4px 16px rgba(67, 56, 202, 0.35)',
                                     transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    letterSpacing: '0.02em'
+                                    whiteSpace: 'nowrap'
                                   }}
                                   title="Listen to recommendation out loud (Text-to-Speech)"
                                 >
-                                  {isSpeaking ? <VolumeX size={17} color="#ffffff" /> : <Volume2 size={17} color="#ffffff" />}
+                                  {isSpeaking ? <VolumeX size={16} color="#ffffff" /> : <Volume2 size={16} color="#ffffff" />}
                                   <span>{isSpeaking ? (isQueryTamil ? 'நிறுத்து' : 'Stop Voice') : (isQueryTamil ? 'குரல் வழிகேட்க' : 'Listen Advice')}</span>
                                 </button>
 
@@ -2199,6 +2204,7 @@ function App() {
                                   borderRadius: '20px', 
                                   fontSize: '0.75rem', 
                                   fontWeight: 800,
+                                  whiteSpace: 'nowrap',
                                   background: advisorResult.risk_level === 'Low' ? '#dcfce7' : advisorResult.risk_level === 'Medium' ? '#fef3c7' : '#fee2e2',
                                   color: advisorResult.risk_level === 'Low' ? '#166534' : advisorResult.risk_level === 'Medium' ? '#b45309' : '#b91c1c',
                                   border: `1px solid ${advisorResult.risk_level === 'Low' ? '#bbf7d0' : advisorResult.risk_level === 'Medium' ? '#fde68a' : '#fca5a5'}`
