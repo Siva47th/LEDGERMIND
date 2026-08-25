@@ -325,7 +325,14 @@ function App() {
     let clean = text;
 
     if (isTamil) {
-      // 1. Convert patterns like ₹65,000-க்கு / 65,000-க்கு / Rs. 65,000-க்கு
+      // 1. Clean bracketed English (Tamil Translation) naming words for audio synthesis
+      // e.g. "Dell India (டெல் கணினி நிறுவனம்)" -> "டெல் கணினி நிறுவனம்"
+      clean = clean.replace(/[A-Za-z0-9\s,&.'-]+\s*\(([\u0B80-\u0BFF\s,&.'-]+)\)/g, '$1');
+      
+      // e.g. "[Shopping (பொருட்கள் வாங்குதல்)]" or "[Education (கல்வி)]" -> "பொருட்கள் வாங்குதல்" / "கல்வி"
+      clean = clean.replace(/\[\s*(?:[A-Za-z0-9\s,&.'-]+\s*\()?([\u0B80-\u0BFF\s,&.'-]+)\)?\s*\]/g, '$1');
+
+      // 2. Convert patterns like ₹65,000-க்கு / 65,000-க்கு / Rs. 65,000-க்கு
       clean = clean.replace(/(?:Rs\.|Rs|₹|ரூ\.|ரூ)?\s*([\d,]+(?:\.\d+)?)\s*-\s*க்கு/gi, (match, p1) => {
         const num = parseFloat(p1.replace(/,/g, ''));
         if (!isNaN(num)) {
@@ -335,7 +342,7 @@ function App() {
         return match;
       });
 
-      // 2. Convert currency symbols (Rs., ₹, ரூ., ரூ) followed by amounts
+      // 3. Convert currency symbols (Rs., ₹, ரூ., ரூ) followed by amounts
       clean = clean.replace(/(?:Rs\.|Rs|₹|ரூ\.|ரூ)\s*([\d,]+(?:\.\d+)?)/gi, (match, p1) => {
         const num = parseFloat(p1.replace(/,/g, ''));
         if (!isNaN(num)) {
@@ -345,11 +352,11 @@ function App() {
         return `ரூபாய் ${p1}`;
       });
 
-      // 3. Remove stray hyphens before Tamil words
+      // 4. Remove stray hyphens before Tamil words
       clean = clean.replace(/-\s*([அ-ஹா-ௌ்]+)/g, ' $1');
       clean = clean.replace(/-/g, ' ');
 
-      // 4. Replace standalone numeric figures with accurate Tamil words
+      // 5. Replace standalone numeric figures with accurate Tamil words
       clean = clean.replace(/\b\d+(?:,\d+)*(?:\.\d+)?\b/g, (match) => {
         const num = parseFloat(match.replace(/,/g, ''));
         if (!isNaN(num)) {
@@ -359,10 +366,13 @@ function App() {
         return match;
       });
 
-      // 5. Translate common English term markers in response
+      // 6. Translate common English term markers in response
       clean = clean.replace(/\bRecommended\b/gi, 'பரிந்துரைக்கப்படுகிறது');
       clean = clean.replace(/\bProceed with Caution\b/gi, 'எச்சரிக்கையுடன் தொடரவும்');
       clean = clean.replace(/\bNot Recommended\b/gi, 'பரிந்துரைக்கப்படவில்லை');
+
+      // 7. Strip any leftover standalone English words so browser Tamil voice speaks 100% fluent Tamil audio
+      clean = clean.replace(/\b[A-Za-z]{2,}\b/g, '');
     } else {
       // English TTS cleanup
       clean = clean.replace(/-\s*/g, ' ');
@@ -394,6 +404,15 @@ function App() {
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utterance.lang = isTamil ? 'ta-IN' : 'en-US';
     utterance.rate = 0.95;
+
+    // Explicitly select official Tamil voice if installed in system browser
+    if (isTamil) {
+      const voices = window.speechSynthesis.getVoices();
+      const taVoice = voices.find(v => v.lang.includes('ta') || v.name.toLowerCase().includes('tamil') || v.name.toLowerCase().includes('heera') || v.name.toLowerCase().includes('valluvar'));
+      if (taVoice) {
+        utterance.voice = taVoice;
+      }
+    }
 
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
