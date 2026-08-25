@@ -29,7 +29,8 @@ import {
   MicOff,
   Volume2,
   VolumeX,
-  Globe
+  Globe,
+  Download
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import './App.css';
@@ -751,6 +752,117 @@ function App() {
     const link = document.createElement("a");
     link.setAttribute("href", url);
     link.setAttribute("download", `FinSense_Transactions_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const downloadSingleInvoice = (txn) => {
+    const isIncome = txn.transaction_type === 'income' || txn.transaction_type === 'return_in';
+    const invoiceNumber = `INV-${String(txn.id).padStart(5, '0')}`;
+    const invoiceTitle = isIncome ? 'TAX INVOICE / RECEIPT' : 'EXPENSE VOUCHER / BILL';
+    const formattedAmount = `Rs. ${Number(txn.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+    const invoiceHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${invoiceNumber} - ${txn.vendor_or_client}</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8fafc; margin: 0; padding: 40px; color: #1e293b; }
+    .invoice-card { max-width: 750px; margin: 0 auto; background: #ffffff; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); padding: 40px; border: 1px solid #e2e8f0; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #f1f5f9; padding-bottom: 25px; }
+    .brand-title { font-size: 28px; font-weight: 800; color: #4338ca; letter-spacing: -0.5px; margin: 0; }
+    .brand-sub { font-size: 13px; color: #64748b; margin-top: 4px; font-weight: 600; }
+    .invoice-badge { background: ${isIncome ? '#dcfce7' : '#fee2e2'}; color: ${isIncome ? '#166534' : '#b91c1c'}; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; display: inline-block; }
+    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 30px 0; }
+    .meta-block h4 { margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
+    .meta-block p { margin: 0; font-size: 16px; font-weight: 700; color: #0f172a; }
+    .table-box { width: 100%; border-collapse: collapse; margin: 25px 0; }
+    .table-box th { background: #f8fafc; text-align: left; padding: 12px 16px; font-size: 13px; color: #475569; border-bottom: 2px solid #e2e8f0; }
+    .table-box td { padding: 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+    .total-section { display: flex; justify-content: flex-end; margin-top: 20px; }
+    .total-box { width: 280px; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; }
+    .total-row { display: flex; justify-content: space-between; font-size: 16px; font-weight: 800; color: #0f172a; }
+    .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }
+    @media print { body { background: #fff; padding: 0; } .invoice-card { box-shadow: none; border: none; padding: 20px; } }
+  </style>
+</head>
+<body>
+  <div class="invoice-card">
+    <div class="header">
+      <div>
+        <h1 class="brand-title">FinSense AI</h1>
+        <div class="brand-sub">Intelligent Financial Operating System</div>
+      </div>
+      <div style="text-align: right;">
+        <span class="invoice-badge">${invoiceTitle}</span>
+        <div style="font-size: 18px; font-weight: 800; margin-top: 8px; color: #0f172a;">${invoiceNumber}</div>
+      </div>
+    </div>
+
+    <div class="meta-grid">
+      <div class="meta-block">
+        <h4>${isIncome ? 'Received From (Client)' : 'Paid To (Vendor / Entity)'}</h4>
+        <p>${txn.vendor_or_client}</p>
+        <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Category: <strong>${txn.category}</strong></div>
+      </div>
+      <div class="meta-block" style="text-align: right;">
+        <h4>Transaction Date</h4>
+        <p>${txn.date}</p>
+        <div style="font-size: 13px; color: #64748b; margin-top: 4px;">System Health: <strong>${txn.outcome_label || 'Healthy'}</strong></div>
+      </div>
+    </div>
+
+    <table class="table-box">
+      <thead>
+        <tr>
+          <th>Description / Item</th>
+          <th>Category</th>
+          <th>Type</th>
+          <th style="text-align: right;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <strong>${txn.vendor_or_client}</strong>
+            ${txn.user_notes ? `<br><span style="font-size: 12px; color: #64748b; font-style: italic;">Note: ${txn.user_notes}</span>` : ''}
+          </td>
+          <td>${txn.category}</td>
+          <td><span style="font-weight: 700; color: ${isIncome ? '#166534' : '#b91c1c'};">${txn.transaction_type.toUpperCase()}</span></td>
+          <td style="text-align: right; font-weight: 800; font-size: 16px;">${formattedAmount}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="total-section">
+      <div class="total-box">
+        <div class="total-row">
+          <span>Total ${isIncome ? 'Received' : 'Outlay'}:</span>
+          <span style="color: ${isIncome ? '#166534' : '#b91c1c'};">${formattedAmount}</span>
+        </div>
+      </div>
+    </div>
+
+    ${txn.user_outcome ? `
+    <div style="margin-top: 20px; background: #eef2ff; padding: 12px 16px; border-radius: 8px; border: 1px solid #c7d2fe; font-size: 13px; color: #3730a3;">
+      <strong>Decision Label:</strong> ${txn.user_outcome}
+    </div>` : ''}
+
+    <div class="footer">
+      Generated automatically by FinSense Financial Intelligence Suite on ${new Date().toLocaleDateString()}.<br>
+      This document serves as an authentic digital audit record.
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const blob = new Blob([invoiceHTML], { type: 'text/html;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `FinSense_Invoice_${invoiceNumber}_${txn.vendor_or_client.replace(/[^a-zA-Z0-9]/g, '_')}.html`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1499,23 +1611,56 @@ function App() {
                               </select>
                             </td>
                             <td style={{ textAlign: 'center' }}>
-                              <button
-                                onClick={() => deleteTransaction(txn.id)}
-                                title="Delete transaction"
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: '#475569',
-                                  cursor: 'pointer',
-                                  padding: '0.3rem',
-                                  borderRadius: '6px',
-                                  transition: 'color 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.color = '#b91c1c'}
-                                onMouseLeave={(e) => e.currentTarget.style.color = '#475569'}
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+                                <button
+                                  onClick={() => downloadSingleInvoice(txn)}
+                                  title="Download printable digital tax invoice / expense voucher"
+                                  style={{
+                                    background: '#e0e7ff',
+                                    border: '1px solid #c7d2fe',
+                                    color: '#4338ca',
+                                    cursor: 'pointer',
+                                    padding: '0.3rem 0.6rem',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.3rem',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 700,
+                                    boxShadow: '0 2px 5px rgba(99, 102, 241, 0.08)',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = '#4338ca';
+                                    e.currentTarget.style.color = '#ffffff';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = '#e0e7ff';
+                                    e.currentTarget.style.color = '#4338ca';
+                                  }}
+                                >
+                                  <Download size={13} />
+                                  <span>Invoice</span>
+                                </button>
+
+                                <button
+                                  onClick={() => deleteTransaction(txn.id)}
+                                  title="Delete transaction"
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#94a3b8',
+                                    cursor: 'pointer',
+                                    padding: '0.3rem',
+                                    borderRadius: '6px',
+                                    transition: 'color 0.2s'
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.color = '#b91c1c'}
+                                  onMouseLeave={(e) => e.currentTarget.style.color = '#94a3b8'}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
