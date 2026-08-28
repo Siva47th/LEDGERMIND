@@ -31,7 +31,9 @@ import {
   VolumeX,
   Globe,
   Download,
-  Zap
+  Zap,
+  Building2,
+  Calendar
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -1815,20 +1817,28 @@ function App() {
                         </div>
                       ) : (
                         <form onSubmit={handleManualSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', textAlign: 'left' }}>
-                          <div className="fields-confirm-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                          <div className="fields-confirm-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                            {/* Row 1: Vendor + Amount */}
                             <div className="field-group">
-                              <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Vendor / Client</label>
+                              <label style={{ color: '#0f172a', fontSize: '0.82rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                <Building2 size={15} color="#4338ca" />
+                                Vendor / Client Name
+                              </label>
                               <input 
                                 type="text" 
                                 placeholder="e.g. ABC Traders, Client XYZ"
                                 value={manualForm.vendor_or_client}
                                 onChange={(e) => setManualForm({ ...manualForm, vendor_or_client: e.target.value })}
                                 required 
-                                style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', fontWeight: 600 }}
+                                style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '0 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '44px', boxSizing: 'border-box', fontWeight: 600 }}
                               />
                             </div>
+
                             <div className="field-group">
-                              <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Amount (Rs.)</label>
+                              <label style={{ color: '#0f172a', fontSize: '0.82rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                <DollarSign size={15} color="#166534" />
+                                Amount (Rs.)
+                              </label>
                               <input 
                                 type="number" 
                                 step="0.01"
@@ -1836,25 +1846,34 @@ function App() {
                                 value={manualForm.amount}
                                 onChange={(e) => setManualForm({ ...manualForm, amount: e.target.value })}
                                 required 
-                                style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', fontWeight: 600 }}
+                                style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '0 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '44px', boxSizing: 'border-box', fontWeight: 600 }}
                               />
                             </div>
+
+                            {/* Row 2: Date + Category */}
                             <div className="field-group">
-                              <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Date</label>
+                              <label style={{ color: '#0f172a', fontSize: '0.82rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                <Calendar size={15} color="#0284c7" />
+                                Transaction Date
+                              </label>
                               <input 
                                 type="date" 
                                 value={manualForm.date}
                                 onChange={(e) => setManualForm({ ...manualForm, date: e.target.value })}
                                 required 
-                                style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', fontWeight: 600 }}
+                                style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '0 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '44px', boxSizing: 'border-box', fontWeight: 600 }}
                               />
                             </div>
+
                             <div className="field-group">
-                              <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Category</label>
+                              <label style={{ color: '#0f172a', fontSize: '0.82rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                <Tag size={15} color="#7e22ce" />
+                                Expense Category
+                              </label>
                               <select 
                                 value={manualForm.category}
                                 onChange={(e) => setManualForm({ ...manualForm, category: e.target.value })}
-                                style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '42px', fontWeight: 600 }}
+                                style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '0 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '44px', boxSizing: 'border-box', fontWeight: 600, cursor: 'pointer' }}
                               >
                                 <option value="Miscellaneous" style={{ background: '#ffffff', color: '#0f172a' }}>Miscellaneous</option>
                                 <option value="Utilities" style={{ background: '#ffffff', color: '#0f172a' }}>Utilities</option>
@@ -1865,12 +1884,17 @@ function App() {
                                 <option value="Financial" style={{ background: '#ffffff', color: '#0f172a' }}>Financial</option>
                               </select>
                             </div>
+
+                            {/* Row 3: Transaction Type + Invoice Ref Tag (Balanced!) */}
                             <div className="field-group">
-                              <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Transaction Type</label>
+                              <label style={{ color: '#0f172a', fontSize: '0.82rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                <Sliders size={15} color="#d97706" />
+                                Transaction Type
+                              </label>
                               <select 
                                 value={manualForm.transaction_type}
                                 onChange={(e) => setManualForm({ ...manualForm, transaction_type: e.target.value })}
-                                style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '42px', fontWeight: 600 }}
+                                style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '0 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '44px', boxSizing: 'border-box', fontWeight: 600, cursor: 'pointer' }}
                               >
                                 <option value="expense" style={{ background: '#ffffff', color: '#b91c1c' }}>↓ Expense (Money Out)</option>
                                 <option value="income" style={{ background: '#ffffff', color: '#166534' }}>↑ Income (Money In)</option>
@@ -1878,13 +1902,32 @@ function App() {
                                 <option value="return_out" style={{ background: '#ffffff', color: '#b91c1c' }}>↓ Refund Given</option>
                               </select>
                             </div>
+
+                            <div className="field-group">
+                              <label style={{ color: '#0f172a', fontSize: '0.82rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                <FileText size={15} color="#475569" />
+                                Invoice Ref No. (Optional)
+                              </label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. INV-2026-0891"
+                                value={manualForm.invoice_ref || ''}
+                                onChange={(e) => setManualForm({ ...manualForm, invoice_ref: e.target.value })}
+                                style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '0 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', height: '44px', boxSizing: 'border-box', fontWeight: 600 }}
+                              />
+                            </div>
+
+                            {/* Row 4: Reasoning / Notes (Full width) */}
                             <div className="field-group" style={{ gridColumn: 'span 2' }}>
-                              <label style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 800, display: 'block', marginBottom: '0.5rem' }}>Reasoning / Notes</label>
+                              <label style={{ color: '#0f172a', fontSize: '0.82rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                <Sparkles size={15} color="#6366f1" />
+                                Reasoning / Notes (Spend Purpose)
+                              </label>
                               <textarea 
-                                placeholder="Explain the purpose of this transaction (e.g. AWS renewal, client payment for services...)"
+                                placeholder="Explain the purpose of this transaction (e.g. AWS cloud renewal, monthly store stock purchase...)"
                                 value={manualForm.user_notes || ''}
                                 onChange={(e) => setManualForm({ ...manualForm, user_notes: e.target.value })}
-                                style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a', padding: '0.65rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', minHeight: '80px', resize: 'vertical', fontWeight: 600 }}
+                                style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', padding: '0.75rem 0.85rem', borderRadius: '10px', fontSize: '0.9rem', width: '100%', outline: 'none', minHeight: '85px', resize: 'vertical', fontWeight: 600, boxSizing: 'border-box' }}
                               />
                             </div>
                           </div>
@@ -1893,7 +1936,7 @@ function App() {
                               type="submit" 
                               className="btn-primary" 
                               disabled={manualSubmitting}
-                              style={{ padding: '0.65rem 1.75rem', background: '#4338ca', color: '#ffffff', fontWeight: 800 }}
+                              style={{ padding: '0.7rem 2rem', background: '#4338ca', color: '#ffffff', fontWeight: 800, borderRadius: '10px', boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)' }}
                             >
                               {manualSubmitting ? 'Recording...' : 'Record Transaction'}
                             </button>
