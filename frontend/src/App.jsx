@@ -10,7 +10,7 @@ import {
   TrendingDown, 
   TrendingUp,
   FileCheck, 
-  DollarSign, 
+  IndianRupee, 
   CheckCircle,
   Clock,
   ArrowRight,
@@ -1273,7 +1273,7 @@ function App() {
                   <div className="mesh-balance-card" style={{ height: 'auto', minHeight: '130px' }}>
                     <div>
                       <div className="balance-label">
-                        <DollarSign size={14} />
+                        <IndianRupee size={14} />
                         <span>Cash Balance Ledger</span>
                       </div>
                       <div className="balance-amount" style={{ fontSize: '1.8rem', margin: '0.25rem 0' }}>
@@ -1953,7 +1953,7 @@ function App() {
 
                             <div className="field-group">
                               <label style={{ color: '#0f172a', fontSize: '0.82rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                                <DollarSign size={15} color="#166534" />
+                                <IndianRupee size={15} color="#166534" />
                                 Amount (Rs.)
                               </label>
                               <input 
@@ -2346,7 +2346,7 @@ function App() {
 
                       <div className="glass-card metric-mini-card">
                         <div className="metric-icon-box blue">
-                          <DollarSign size={20} />
+                          <IndianRupee size={20} />
                         </div>
                         <div className="metric-details">
                           <span className="metric-detail-label">ARIMA Ending Cash</span>
