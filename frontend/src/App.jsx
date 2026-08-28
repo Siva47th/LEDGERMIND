@@ -33,7 +33,9 @@ import {
   Download,
   Zap,
   Building2,
-  Calendar
+  Calendar,
+  Pencil,
+  Check
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -858,6 +860,27 @@ function App() {
     }
   };
 
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [editingNoteText, setEditingNoteText] = useState('');
+
+  const saveTransactionNotes = async (txnId, newNotes) => {
+    try {
+      const res = await fetch(`${API_BASE}/transactions/${txnId}/notes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_notes: newNotes })
+      });
+      if (!res.ok) throw new Error('Failed to save notes');
+      setTransactions(prev => prev.map(txn => 
+        txn.id === txnId ? { ...txn, user_notes: newNotes } : txn
+      ));
+      setEditingNoteId(null);
+    } catch (err) {
+      console.error('Failed to save notes:', err);
+      alert('Could not save transaction notes.');
+    }
+  };
+
   const updateTransactionType = async (txnId, newType) => {
     try {
       const res = await fetch(`${API_BASE}/transactions/${txnId}/type`, {
@@ -1533,8 +1556,65 @@ function App() {
                                 {txn.category}
                               </span>
                             </td>
-                            <td style={{ color: '#334155', fontWeight: 600, fontSize: '0.85rem', textAlign: 'justify', textAlignLast: 'left', textJustify: 'inter-word' }} title={txn.user_notes}>
-                              {txn.user_notes || '—'}
+                            <td 
+                              style={{ color: '#334155', fontWeight: 600, fontSize: '0.85rem', minWidth: '180px', cursor: 'pointer' }}
+                              title="Click to edit notes for this transaction"
+                            >
+                              {editingNoteId === txn.id ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  <input
+                                    type="text"
+                                    value={editingNoteText}
+                                    onChange={(e) => setEditingNoteText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') saveTransactionNotes(txn.id, editingNoteText);
+                                      if (e.key === 'Escape') setEditingNoteId(null);
+                                    }}
+                                    autoFocus
+                                    style={{
+                                      background: '#ffffff',
+                                      border: '1.5px solid #6366f1',
+                                      borderRadius: '6px',
+                                      padding: '0.3rem 0.5rem',
+                                      fontSize: '0.82rem',
+                                      fontWeight: 600,
+                                      color: '#0f172a',
+                                      width: '100%',
+                                      outline: 'none',
+                                      boxShadow: '0 0 0 2px rgba(99, 102, 241, 0.2)'
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => saveTransactionNotes(txn.id, editingNoteText)}
+                                    style={{
+                                      background: '#4338ca',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      padding: '0.35rem 0.5rem',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      flexShrink: 0
+                                    }}
+                                    title="Save notes"
+                                  >
+                                    <Check size={14} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div 
+                                  onClick={() => {
+                                    setEditingNoteId(txn.id);
+                                    setEditingNoteText(txn.user_notes || '');
+                                  }}
+                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}
+                                >
+                                  <span style={{ textStyle: 'justify' }}>{txn.user_notes || '— Click to add notes —'}</span>
+                                  <Pencil size={13} style={{ color: '#94a3b8', opacity: 0.6, flexShrink: 0 }} />
+                                </div>
+                              )}
                             </td>
                             <td style={{ textAlign: 'right', fontWeight: 800, whiteSpace: 'nowrap', minWidth: '130px', color: txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '#166534' : '#b91c1c' }}>
                               {txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '+' : '-'}Rs.{txn.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
