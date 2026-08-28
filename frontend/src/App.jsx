@@ -1125,15 +1125,18 @@ function App() {
     <div className="app-container">
       {/* Sidebar Navigation */}
       <aside className="sidebar">
-        <div className="sidebar-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.35rem 0 0.85rem 0' }}>
+        <div className="sidebar-brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', padding: '0.25rem 0 1rem 0' }}>
           <img 
             src="/LedgerMindd.png" 
             alt="LedgerMind Logo" 
-            style={{ height: '56px', width: 'auto', maxWidth: '68px', objectFit: 'contain', borderRadius: '12px', filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.28))' }}
+            style={{ 
+              height: '68px', 
+              width: 'auto', 
+              maxWidth: '220px', 
+              objectFit: 'contain', 
+              filter: 'drop-shadow(0 6px 16px rgba(99, 102, 241, 0.22))' 
+            }}
           />
-          <h1 className="sidebar-title" style={{ fontSize: '1.55rem', fontWeight: 800, background: 'linear-gradient(135deg, #3730a3, #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0, letterSpacing: '-0.03em' }}>
-            LedgerMind
-          </h1>
         </div>
 
         <nav className="sidebar-menu">
