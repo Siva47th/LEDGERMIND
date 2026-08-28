@@ -950,8 +950,8 @@
   max-height: 520px;
   overflow-y: auto;
   border-radius: 16px;
-  border: 1.5px solid #e2e8f0;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+  border: 1.5px solid #cbd5e1;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
 }
 
 .ledger-table {
@@ -965,15 +965,21 @@
   padding: 0.95rem 1.15rem;
   font-size: 0.75rem;
   text-transform: uppercase;
-  color: #475569;
+  color: #334155;
   font-weight: 800;
   letter-spacing: 0.06em;
   border-bottom: 2px solid #cbd5e1;
-  background: #f8fafc;
+  border-right: 1px solid #cbd5e1;
+  background: #f1f5f9;
   position: sticky;
   top: 0;
   z-index: 1;
   white-space: nowrap;
+  vertical-align: middle;
+}
+
+.ledger-table th:last-child {
+  border-right: none;
 }
 
 .ledger-table td {
@@ -981,9 +987,20 @@
   font-size: 0.88rem;
   color: #1e293b;
   border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  vertical-align: middle;
 }
 
-.ledger-table td:first-child, .custom-table td:first-child {
+.ledger-table td:last-child {
+  border-right: none;
+}
+
+.ledger-table td:nth-child(2) {
+  text-align: justify;
+  line-height: 1.45;
+}
+
+.ledger-table td:first-child {
   white-space: nowrap !important;
   font-weight: 700;
 }

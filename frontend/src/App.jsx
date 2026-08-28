@@ -2236,7 +2236,7 @@ function App() {
                           <thead>
                             <tr>
                               <th style={{ textAlign: 'left', whiteSpace: 'nowrap', width: '120px' }}>Date</th>
-                              <th style={{ textAlign: 'left' }}>Daily Events / Vendors</th>
+                              <th style={{ textAlign: 'justify' }}>Daily Events / Vendors</th>
                               <th style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>Cash Inflow</th>
                               <th style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>Cash Outflow</th>
                               <th style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>Closing Balance</th>
@@ -2251,7 +2251,7 @@ function App() {
                                 return (
                                   <tr key={index}>
                                     <td style={{ fontWeight: 700, textAlign: 'left', color: '#0f172a', whiteSpace: 'nowrap', width: '120px' }}>{h.date}</td>
-                                    <td style={{ textAlign: 'left' }}>
+                                    <td style={{ textAlign: 'justify', lineHeight: 1.45 }}>
                                       <span style={{ 
                                         color: h.actual_invoice > 0 ? '#4338ca' : h.recurring > 0 ? '#7e22ce' : '#0f172a',
                                         fontWeight: 700
