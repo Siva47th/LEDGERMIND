@@ -137,7 +137,7 @@ def health_check():
     status_code = 200 if db_status == "connected" else 500
     return jsonify({
         "status": "ok" if db_status == "connected" else "unhealthy",
-        "message": "FinSense API is up and running",
+        "message": "LedgerMind API is up and running",
         "database": db_status,
         "environment": os.getenv("FLASK_ENV", "production")
     }), status_code
@@ -652,7 +652,7 @@ def download_invoice_pdf(txn_id):
         doc_title = "TAX INVOICE / RECEIPT" if is_income else "EXPENSE VOUCHER / BILL"
         invoice_no = f"INV-{txn_id:05d}"
         clean_vendor = "".join(c for c in vendor if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
-        filename = f"FinSense_Invoice_{invoice_no}_{clean_vendor}.pdf"
+        filename = f"LedgerMind_Invoice_{invoice_no}_{clean_vendor}.pdf"
 
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
@@ -684,7 +684,7 @@ def download_invoice_pdf(txn_id):
         # 1. Header Table
         header_data = [
             [
-                Paragraph("<b>FinSense AI</b>", title_style),
+                Paragraph("<b>LedgerMind AI</b>", title_style),
                 Paragraph(f"<b>{doc_title}</b>", badge_style)
             ],
             [
@@ -794,7 +794,7 @@ def download_invoice_pdf(txn_id):
 
         # 6. Footer
         story.append(HRFlowable(width="100%", thickness=0.75, color=colors.HexColor('#e2e8f0'), spaceAfter=10))
-        story.append(Paragraph(f"Generated automatically by FinSense Financial Operating System on {datetime.today().strftime('%B %d, %Y')}.<br/>This authentic digital PDF document serves as an offline verifiable financial record.", footer_style))
+        story.append(Paragraph(f"Generated automatically by LedgerMind Financial Operating System on {datetime.today().strftime('%B %d, %Y')}.<br/>This authentic digital PDF document serves as an offline verifiable financial record.", footer_style))
 
         doc.build(story)
         buffer.seek(0)

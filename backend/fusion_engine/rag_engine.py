@@ -301,7 +301,7 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
 
     # 4. Construct System & User Prompt for Gemini
     system_instruction = (
-        "You are FinSense AI, an expert small-business financial advisor. "
+        "You are LedgerMind AI, an expert small-business financial advisor. "
         "You analyze business spending and revenue proposals against live cash balance, past decision history (case memory), "
         "and 30-day predictive forecasts. You provide clear, grounded, non-jargon financial advice."
     )

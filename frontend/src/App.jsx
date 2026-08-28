@@ -804,7 +804,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `FinSense_Cash_Flow_Audit_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `LedgerMind_Cash_Flow_Audit_Report_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -821,7 +821,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `FinSense_Transactions_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `LedgerMind_Transactions_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -830,7 +830,7 @@ function App() {
   const downloadSingleInvoice = (txn) => {
     const invoiceNumber = `INV-${String(txn.id).padStart(5, '0')}`;
     const cleanVendor = String(txn.vendor_or_client || 'Record').replace(/[^a-zA-Z0-9]/g, '_');
-    const filename = `FinSense_Invoice_${invoiceNumber}_${cleanVendor}.pdf`;
+    const filename = `LedgerMind_Invoice_${invoiceNumber}_${cleanVendor}.pdf`;
 
     const a = document.createElement('a');
     a.style.display = 'none';
@@ -1125,9 +1125,15 @@ function App() {
     <div className="app-container">
       {/* Sidebar Navigation */}
       <aside className="sidebar">
-        <div className="sidebar-brand">
-          <div className="sidebar-logo">FS</div>
-          <h1 className="sidebar-title">FinSense</h1>
+        <div className="sidebar-brand" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0' }}>
+          <img 
+            src="/LedgerMindd.png" 
+            alt="LedgerMind Logo" 
+            style={{ width: '38px', height: '38px', objectFit: 'contain', borderRadius: '10px', filter: 'drop-shadow(0 4px 10px rgba(99, 102, 241, 0.3))' }}
+          />
+          <h1 className="sidebar-title" style={{ fontSize: '1.45rem', fontWeight: 800, background: 'linear-gradient(135deg, #3730a3, #6366f1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0, letterSpacing: '-0.02em' }}>
+            LedgerMind
+          </h1>
         </div>
 
         <nav className="sidebar-menu">
@@ -3056,7 +3062,7 @@ function App() {
                         </div>
                         
                         <p style={{ fontSize: '0.8rem', color: '#475569', fontWeight: 600, marginBottom: '1rem', lineHeight: 1.4 }}>
-                          FinSense dynamically balances vector case memory vs. baseline financial rules based on case history volume.
+                          LedgerMind dynamically balances vector case memory vs. baseline financial rules based on case history volume.
                         </p>
 
                         <div style={{ marginBottom: '1.25rem' }}>
