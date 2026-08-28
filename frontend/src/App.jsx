@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, LineChart, Line, Area, ComposedChart, ReferenceLine, ReferenceArea, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import './App.css';
 
 const API_BASE = 'http://localhost:5000/api';
@@ -2073,64 +2073,144 @@ function App() {
                     </div>
 
                     {/* Chart panel */}
-                    <div className="glass-card" style={{ padding: '1.75rem' }}>
-                      <div className="grid-section-header">
-                        <h3>Prophet vs. ARIMA Forecast (30 Days Outlook)</h3>
-                      </div>
+                    {(() => {
+                      const chartData = getCombinedChartData();
+                      // Calculate dynamic domain so line curves fill vertical height dynamically
+                      const validValues = chartData
+                        .flatMap(d => [d.actual, d.prophet, d.arima])
+                        .filter(v => v !== null && v !== undefined && !isNaN(v));
+                      const minBal = validValues.length ? Math.floor(Math.min(...validValues) * 0.96 / 1000) * 1000 : 1500000;
+                      const maxBal = validValues.length ? Math.ceil(Math.max(...validValues) * 1.04 / 1000) * 1000 : 2500000;
                       
-                      <div style={{ width: '100%', height: '350px', marginTop: '1.5rem' }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart 
-                            data={getCombinedChartData()}
-                            margin={{ top: 10, right: 30, left: 20, bottom: 10 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(99, 102, 241, 0.08)" />
-                            <XAxis 
-                              dataKey="date" 
-                              stroke="#64748b" 
-                              fontSize={11}
-                              tickLine={false}
-                              axisLine={false}
-                            />
-                            <YAxis 
-                              stroke="#64748b"
-                              fontSize={11}
-                              tickLine={false}
-                              axisLine={false}
-                              tickFormatter={(value) => `Rs.${(value/1000).toFixed(0)}k`}
-                            />
-                            <Tooltip content={<CustomTooltip />} />
-                            <Legend />
-                            <Line 
-                              type="monotone" 
-                              dataKey="actual" 
-                              name="Historical Actual" 
-                              stroke="#3b82f6" 
-                              strokeWidth={3}
-                              dot={false}
-                            />
-                            <Line 
-                              type="monotone" 
-                              dataKey="prophet" 
-                              name="Prophet Forecast" 
-                              stroke="#818cf8" 
-                              strokeWidth={2}
-                              strokeDasharray="4 4"
-                              dot={false}
-                            />
-                            <Line 
-                              type="monotone" 
-                              dataKey="arima" 
-                              name="ARIMA Baseline" 
-                              stroke="#c084fc" 
-                              strokeWidth={2}
-                              strokeDasharray="6 6"
-                              dot={false}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
+                      const lastActualNode = forecastData.historical[forecastData.historical.length - 1];
+                      const transitionDate = lastActualNode ? lastActualNode.date : null;
+
+                      return (
+                        <div className="glass-card" style={{ padding: '1.75rem', background: 'linear-gradient(135deg, #ffffff 60%, #f8fafc 100%)', border: '1px solid #c7d2fe' }}>
+                          <div className="grid-section-header" style={{ marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                            <div style={{ textAlign: 'left' }}>
+                              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <TrendingUp size={22} color="#6366f1" />
+                                Prophet vs. ARIMA Ensemble Forecast (30-Day Outlook)
+                              </h3>
+                              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>
+                                Out-of-sample predictive trajectory overlaid with historical actual cash reserves
+                              </p>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 800, padding: '0.35rem 0.75rem', borderRadius: '20px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#4f46e5' }}></span>
+                                Actuals
+                              </span>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 800, padding: '0.35rem 0.75rem', borderRadius: '20px', background: '#f5f3ff', color: '#7e22ce', border: '1px solid #e9d5ff', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#8b5cf6' }}></span>
+                                Prophet (89.62%)
+                              </span>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 800, padding: '0.35rem 0.75rem', borderRadius: '20px', background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#06b6d4' }}></span>
+                                ARIMA (96.86%)
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div style={{ width: '100%', height: '390px', marginTop: '1.25rem' }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                              <ComposedChart 
+                                data={chartData}
+                                margin={{ top: 15, right: 30, left: 15, bottom: 15 }}
+                              >
+                                <defs>
+                                  <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.35}/>
+                                    <stop offset="95%" stopColor="#818cf8" stopOpacity={0.01}/>
+                                  </linearGradient>
+                                  <linearGradient id="prophetGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.25}/>
+                                    <stop offset="95%" stopColor="#c084fc" stopOpacity={0.01}/>
+                                  </linearGradient>
+                                  <linearGradient id="arimaGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.20}/>
+                                    <stop offset="95%" stopColor="#38bdf8" stopOpacity={0.01}/>
+                                  </linearGradient>
+                                </defs>
+
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(99, 102, 241, 0.08)" vertical={false} />
+                                <XAxis 
+                                  dataKey="date" 
+                                  stroke="#64748b" 
+                                  fontSize={11}
+                                  fontWeight={600}
+                                  tickLine={false}
+                                  axisLine={{ stroke: '#cbd5e1' }}
+                                />
+                                <YAxis 
+                                  stroke="#64748b"
+                                  fontSize={11}
+                                  fontWeight={700}
+                                  tickLine={false}
+                                  axisLine={false}
+                                  domain={[minBal, maxBal]}
+                                  tickFormatter={(value) => `Rs.${(value/1000).toFixed(0)}k`}
+                                />
+                                <Tooltip content={<CustomTooltip />} />
+                                
+                                {transitionDate && (
+                                  <ReferenceLine 
+                                    x={transitionDate} 
+                                    stroke="#6366f1" 
+                                    strokeDasharray="4 4" 
+                                    strokeWidth={2}
+                                    label={{ 
+                                      value: 'Forecast Start ➔', 
+                                      position: 'top', 
+                                      fill: '#4338ca', 
+                                      fontSize: 11, 
+                                      fontWeight: 800 
+                                    }} 
+                                  />
+                                )}
+
+                                {/* Historical Actuals - Filled Area */}
+                                <Area 
+                                  type="monotone" 
+                                  dataKey="actual" 
+                                  name="Historical Actual" 
+                                  stroke="#4f46e5" 
+                                  strokeWidth={3.5}
+                                  fill="url(#actualGrad)"
+                                  dot={false}
+                                  activeDot={{ r: 6, fill: '#4f46e5', stroke: '#ffffff', strokeWidth: 2 }}
+                                />
+                                
+                                {/* Prophet Forecast - Filled Area */}
+                                <Area 
+                                  type="monotone" 
+                                  dataKey="prophet" 
+                                  name="Prophet Forecast" 
+                                  stroke="#8b5cf6" 
+                                  strokeWidth={3}
+                                  strokeDasharray="5 5"
+                                  fill="url(#prophetGrad)"
+                                  dot={false}
+                                />
+                                
+                                {/* ARIMA Forecast - Line */}
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="arima" 
+                                  name="ARIMA Baseline" 
+                                  stroke="#06b6d4" 
+                                  strokeWidth={3}
+                                  strokeDasharray="4 4"
+                                  dot={false}
+                                />
+                              </ComposedChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Audit Ledger Table */}
                     <div className="glass-card" style={{ padding: '1.75rem', marginTop: '0.5rem' }}>
