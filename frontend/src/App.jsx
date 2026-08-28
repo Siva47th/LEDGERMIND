@@ -1557,7 +1557,17 @@ function App() {
                               </span>
                             </td>
                             <td 
-                              style={{ color: '#334155', fontWeight: 600, fontSize: '0.85rem', minWidth: '180px', cursor: 'pointer' }}
+                              style={{ 
+                                color: '#334155', 
+                                fontWeight: 600, 
+                                fontSize: '0.85rem', 
+                                minWidth: '180px', 
+                                cursor: 'pointer',
+                                textAlign: 'justify',
+                                textAlignLast: 'left',
+                                textJustify: 'inter-word',
+                                lineHeight: 1.45
+                              }}
                               title="Click to edit notes for this transaction"
                             >
                               {editingNoteId === txn.id ? (
@@ -1611,7 +1621,7 @@ function App() {
                                   }}
                                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}
                                 >
-                                  <span style={{ textStyle: 'justify' }}>{txn.user_notes || '— Click to add notes —'}</span>
+                                  <span style={{ textAlign: 'justify', textAlignLast: 'left', textJustify: 'inter-word' }}>{txn.user_notes || '— Click to add notes —'}</span>
                                   <Pencil size={13} style={{ color: '#94a3b8', opacity: 0.6, flexShrink: 0 }} />
                                 </div>
                               )}
