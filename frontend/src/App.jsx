@@ -2873,6 +2873,7 @@ function App() {
                           type="number"
                           step="0.01"
                           className="custom-input"
+                          style={{ paddingLeft: '2.75rem' }}
                           value={settingsForm.starting_balance}
                           onChange={(e) => setSettingsForm(prev => ({ ...prev, starting_balance: parseFloat(e.target.value) || 0 }))}
                         />
@@ -2892,6 +2893,7 @@ function App() {
                           type="number"
                           step="0.01"
                           className="custom-input"
+                          style={{ paddingLeft: '2.75rem' }}
                           value={settingsForm.balance_alert_threshold}
                           onChange={(e) => setSettingsForm(prev => ({ ...prev, balance_alert_threshold: parseFloat(e.target.value) || 0 }))}
                         />
@@ -2909,6 +2911,7 @@ function App() {
                         <span className="custom-input-icon"><Bot size={18} color="#6366f1" /></span>
                         <select
                           className="custom-select"
+                          style={{ paddingLeft: '2.75rem' }}
                           value={settingsForm.gemini_model}
                           onChange={(e) => setSettingsForm(prev => ({ ...prev, gemini_model: e.target.value }))}
                         >

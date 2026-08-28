@@ -274,7 +274,7 @@
 
 .custom-input-icon {
   position: absolute;
-  left: 0.95rem;
+  left: 0.9rem;
   top: 50%;
   transform: translateY(-50%);
   color: #6366f1;
@@ -284,13 +284,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2;
+  z-index: 3;
+  width: 20px;
+  height: 20px;
 }
 
-.custom-input {
+.custom-input, .field-group .custom-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 0.8rem 1rem 0.8rem 2.6rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  padding-right: 1rem;
+  padding-left: 2.75rem !important;
   border-radius: 12px;
   background: #ffffff;
   border: 1.5px solid #cbd5e1;
@@ -302,21 +307,24 @@
   transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.custom-input.no-icon {
-  padding-left: 1rem;
+.custom-input.no-icon, .field-group .custom-input.no-icon {
+  padding-left: 1rem !important;
 }
 
-.custom-input:focus {
+.custom-input:focus, .field-group .custom-input:focus {
   outline: none;
   background: #ffffff;
   border-color: #6366f1;
   box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14), 0 2px 8px rgba(99, 102, 241, 0.06);
 }
 
-.custom-select {
+.custom-select, .field-group .custom-select {
   width: 100%;
   box-sizing: border-box;
-  padding: 0.8rem 2.6rem 0.8rem 2.6rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  padding-right: 2.5rem;
+  padding-left: 2.75rem !important;
   border-radius: 12px;
   background: #ffffff;
   border: 1.5px solid #cbd5e1;
@@ -333,7 +341,7 @@
   cursor: pointer;
 }
 
-.custom-select:focus {
+.custom-select:focus, .field-group .custom-select:focus {
   outline: none;
   border-color: #6366f1;
   box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14), 0 2px 8px rgba(99, 102, 241, 0.06);
