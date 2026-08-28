@@ -138,6 +138,7 @@ function App() {
     data: null,
     error: null
   });
+  const [hoveredPieCategory, setHoveredPieCategory] = useState(null);
   const [uploadMode, setUploadMode] = useState('ocr'); // 'ocr' | 'manual'
   const [manualForm, setManualForm] = useState({
     vendor_or_client: '',
