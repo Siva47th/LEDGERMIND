@@ -2417,6 +2417,131 @@ function App() {
                   </div>
                 )}
 
+                {/* Advisor Pre-Query Welcome & Intelligence Dashboard Overview */}
+                {!advisorResult && !advisorLoading && (
+                  <div className="fade-in" style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1.35rem' }}>
+                    {/* 4 Engine Architecture Cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.25rem' }}>
+                      
+                      <div className="glass-card" style={{ padding: '1.35rem', borderLeft: '4px solid #6366f1', background: 'linear-gradient(135deg, #ffffff 60%, #f5f3ff 100%)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                          <div style={{ padding: '0.5rem', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <BrainCircuit size={20} />
+                          </div>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '12px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>
+                            Gemini 3.5 LLM
+                          </span>
+                        </div>
+                        <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                          {advisorLang === 'ta' ? 'RAG Fusion பகுப்பாய்வு' : 'RAG Fusion AI Engine'}
+                        </h4>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', fontWeight: 500, lineHeight: 1.45 }}>
+                          {advisorLang === 'ta'
+                            ? 'நேரடி ரொக்க இருப்பு மற்றும் ChromaDB வரலாற்று நினைவுகளுடன் AI பரிந்துரை தருகிறது.'
+                            : 'Generates explainable, context-aware financial advice blended with live cash balance & vector memory.'}
+                        </p>
+                      </div>
+
+                      <div className="glass-card" style={{ padding: '1.35rem', borderLeft: '4px solid #10b981', background: 'linear-gradient(135deg, #ffffff 60%, #f0fdf4 100%)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                          <div style={{ padding: '0.5rem', background: 'linear-gradient(135deg, #10b981, #059669)', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Database size={20} />
+                          </div>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '12px', background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}>
+                            447 SME Cases
+                          </span>
+                        </div>
+                        <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                          {advisorLang === 'ta' ? 'ChromaDB வழக்கு நினைவு' : 'Vector Case Memory'}
+                        </h4>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', fontWeight: 500, lineHeight: 1.45 }}>
+                          {advisorLang === 'ta'
+                            ? 'முந்தைய 447 வணிக செலவு முடிவுகள் மற்றும் அவற்றின் விளைவுகளை ஒப்பீடு செய்கிறது.'
+                            : 'Retrieves semantically similar past SME spend decisions & outcome trajectory histories via Cosine distance.'}
+                        </p>
+                      </div>
+
+                      <div className="glass-card" style={{ padding: '1.35rem', borderLeft: '4px solid #06b6d4', background: 'linear-gradient(135deg, #ffffff 60%, #f0f9ff 100%)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                          <div style={{ padding: '0.5rem', background: 'linear-gradient(135deg, #06b6d4, #0284c7)', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <TrendingUp size={20} />
+                          </div>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '12px', background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' }}>
+                            30-Day Forecast
+                          </span>
+                        </div>
+                        <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                          {advisorLang === 'ta' ? 'ரொக்கப் புழக்கம் கணிப்பு' : 'Cashflow Forecasting'}
+                        </h4>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', fontWeight: 500, lineHeight: 1.45 }}>
+                          {advisorLang === 'ta'
+                            ? 'அடுத்த 30 நாட்களின் வருவாய் மற்றும் செலவு போக்குகளை Prophet & ARIMA மூலம் கணிக்கிறது.'
+                            : 'Ensemble Prophet & ARIMA(1,1,1) time series models forecasting 30-day liquidity risks.'}
+                        </p>
+                      </div>
+
+                      <div className="glass-card" style={{ padding: '1.35rem', borderLeft: '4px solid #f59e0b', background: 'linear-gradient(135deg, #ffffff 60%, #fffbe6 100%)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                          <div style={{ padding: '0.5rem', background: 'linear-gradient(135deg, #f59e0b, #d97706)', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <ShieldAlert size={20} />
+                          </div>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '12px', background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
+                            ₹10,000 Buffer
+                          </span>
+                        </div>
+                        <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                          {advisorLang === 'ta' ? 'பாதுகாப்பு எச்சரிக்கை' : 'Risk & Safety Buffer'}
+                        </h4>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', fontWeight: 500, lineHeight: 1.45 }}>
+                          {advisorLang === 'ta'
+                            ? 'ரொக்க இருப்பு பாதுகாப்பு வரம்பை விட குறையும் அபாயம் இருந்தால் உடனடி எச்சரிக்கை அளிக்கும்.'
+                            : 'Monitors liquidity thresholds to prevent cash crunch strains before committing new spend.'}
+                        </p>
+                      </div>
+
+                    </div>
+
+                    {/* How RAG Fusion Works Visual Banner */}
+                    <div className="glass-card" style={{ padding: '1.4rem 1.65rem', background: 'linear-gradient(135deg, #faf5ff 0%, #eef2ff 100%)', border: '1px solid #c7d2fe' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <div style={{ padding: '0.65rem', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', borderRadius: '12px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Sparkles size={22} />
+                          </div>
+                          <div>
+                            <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                              {advisorLang === 'ta' ? 'RAG Fusion எவ்வாறு செயல்படுகிறது?' : 'How RAG Fusion Reasoning Works'}
+                            </h4>
+                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>
+                              {advisorLang === 'ta'
+                                ? 'வணிகக் கேள்வி → 447 வழக்கு நினைவுகள் + 30-நாள் நிதி கணிப்பு → AI விளக்கம் & பரிந்துரை'
+                                : 'User Question → 447 ChromaDB Cases + 30-Day Cashflow Trajectory → Explainable AI Verdict'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span className="badge" style={{ background: '#ffffff', color: '#4338ca', border: '1px solid #c7d2fe', padding: '0.35rem 0.75rem', fontWeight: 800 }}>
+                            1. Query Fusion
+                          </span>
+                          <ArrowRight size={14} color="#94a3b8" />
+                          <span className="badge" style={{ background: '#ffffff', color: '#15803d', border: '1px solid #86efac', padding: '0.35rem 0.75rem', fontWeight: 800 }}>
+                            2. Vector Search
+                          </span>
+                          <ArrowRight size={14} color="#94a3b8" />
+                          <span className="badge" style={{ background: '#ffffff', color: '#0369a1', border: '1px solid #bae6fd', padding: '0.35rem 0.75rem', fontWeight: 800 }}>
+                            3. Forecast Blend
+                          </span>
+                          <ArrowRight size={14} color="#94a3b8" />
+                          <span className="badge" style={{ background: '#6366f1', color: '#ffffff', border: 'none', padding: '0.35rem 0.75rem', fontWeight: 800 }}>
+                            4. AI Verdict
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Advisor Recommendation Result Display */}
                 {advisorResult && (
                   <div className="fade-in">
