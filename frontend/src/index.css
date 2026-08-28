@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
@@ -7,12 +7,28 @@
 
   color-scheme: light;
   color: #0f172a;
-  background-color: #f8fafc;
+  background-color: #f1f5f9;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Vibrant Color Tokens */
+  --primary-indigo: #6366f1;
+  --primary-indigo-dark: #4f46e5;
+  --accent-purple: #8b5cf6;
+  --accent-fuchsia: #d946ef;
+  --accent-emerald: #10b981;
+  --accent-amber: #f59e0b;
+  --accent-rose: #f43f5e;
+  --accent-cyan: #06b6d4;
+  --accent-blue: #3b82f6;
+
+  --bg-gradient-mesh: radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+                      radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.08) 0px, transparent 50%),
+                      radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.06) 0px, transparent 50%),
+                      radial-gradient(at 0% 100%, rgba(245, 158, 11, 0.06) 0px, transparent 50%);
 }
 
 body {
@@ -20,7 +36,9 @@ body {
   display: block;
   min-width: 320px;
   min-height: 100vh;
-  background: #f8fafc;
+  background: #f1f5f9;
+  background-image: var(--bg-gradient-mesh);
+  background-attachment: fixed;
   color: #0f172a;
   overflow: hidden;
 }
@@ -38,6 +56,7 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'Outfit', sans-serif;
   color: #0f172a;
   margin-top: 0;
+  letter-spacing: -0.02em;
 }
 
 /* Custom Scrollbar */
@@ -47,7 +66,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(241, 245, 249, 0.5);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -88,19 +107,10 @@ h1, h2, h3, h4, h5, h6 {
     transform: translateY(0px);
   }
   50% {
-    transform: translateY(-8px);
+    transform: translateY(-6px);
   }
   100% {
     transform: translateY(0px);
-  }
-}
-
-@keyframes spin-slow {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
   }
 }
 
@@ -150,17 +160,13 @@ h1, h2, h3, h4, h5, h6 {
     transform: scale(1);
   }
   50% {
-    opacity: 0.85;
-    transform: scale(1.04);
+    opacity: 0.88;
+    transform: scale(1.03);
   }
 }
 
 /* Utility Classes */
-.loading-spinner {
-  animation: spin 1s linear infinite;
-}
-
-.spin {
+.loading-spinner, .spin {
   animation: spin 1s linear infinite;
 }
 

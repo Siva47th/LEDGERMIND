@@ -1252,7 +1252,7 @@ function App() {
                   </div>
 
                   {/* Summary Metric Cards */}
-                  <div className="glass-card metric-mini-card">
+                  <div className="glass-card metric-mini-card income-card">
                     <div className="metric-icon-box green">
                       <TrendingUp size={20} />
                     </div>
@@ -1262,7 +1262,7 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="glass-card metric-mini-card">
+                  <div className="glass-card metric-mini-card expense-card">
                     <div className="metric-icon-box blue">
                       <TrendingDown size={20} />
                     </div>
@@ -1272,7 +1272,7 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="glass-card metric-mini-card">
+                  <div className="glass-card metric-mini-card cashflow-card">
                     <div className="metric-icon-box indigo">
                       <FileCheck size={20} />
                     </div>
