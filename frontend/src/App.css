@@ -996,7 +996,7 @@
 }
 
 .ledger-table td:nth-child(2) {
-  text-align: justify;
+  text-align: left;
   line-height: 1.45;
 }
 
