@@ -35,7 +35,8 @@ import {
   Building2,
   Calendar,
   Pencil,
-  Check
+  Check,
+  PieChart as PieIcon
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -1328,8 +1329,8 @@ function App() {
                   <div className="glass-card chart-card">
                     <div className="grid-section-header" style={{ width: '100%', marginBottom: '1.25rem' }}>
                       <div style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                        <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 14px rgba(99, 102, 241, 0.25)' }}>
-                          <PieChart size={20} />
+                        <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', boxShadow: '0 4px 14px rgba(99, 102, 241, 0.25)' }}>
+                          <PieIcon size={20} color="#ffffff" />
                         </div>
                         <div>
                           <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Expense Distribution by Category</h3>
