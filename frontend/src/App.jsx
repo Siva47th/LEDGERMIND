@@ -1317,13 +1317,18 @@ function App() {
                   
                   {/* Left Side: Category Spend Pie Chart */}
                   <div className="glass-card chart-card">
-                    <div className="grid-section-header" style={{ width: '100%', marginBottom: '1rem' }}>
-                      <div style={{ textAlign: 'left' }}>
-                        <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Expense distribution by Category</h3>
-                        <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Categorized operational spend breakdown</p>
+                    <div className="grid-section-header" style={{ width: '100%', marginBottom: '1.25rem' }}>
+                      <div style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                        <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 14px rgba(99, 102, 241, 0.25)' }}>
+                          <PieChart size={20} />
+                        </div>
+                        <div>
+                          <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Expense Distribution by Category</h3>
+                          <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Real-time operational spend breakdown</p>
+                        </div>
                       </div>
                       {stats.category_spend && stats.category_spend.length > 0 && (
-                        <span className="badge category" style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem', fontWeight: 700 }}>
+                        <span style={{ fontSize: '0.78rem', padding: '0.35rem 0.85rem', fontWeight: 800, background: '#eef2ff', color: '#4338ca', borderRadius: '20px', border: '1px solid #c7d2fe', boxShadow: '0 2px 6px rgba(99, 102, 241, 0.1)' }}>
                           {stats.category_spend.length} Categories
                         </span>
                       )}
@@ -1333,10 +1338,10 @@ function App() {
                       (() => {
                         const totalSpend = stats.category_spend.reduce((acc, curr) => acc + (curr.value || 0), 0);
                         return (
-                          <div style={{ width: '100%', display: 'grid', gridTemplateColumns: '220px 1fr', gap: '2rem', alignItems: 'center' }}>
+                          <div style={{ width: '100%', display: 'grid', gridTemplateColumns: '240px 1fr', gap: '2.25rem', alignItems: 'center' }}>
                             
                             {/* Donut Chart with Center Total Summary */}
-                            <div style={{ width: '220px', height: '220px', position: 'relative', flexShrink: 0, outline: 'none' }}>
+                            <div style={{ width: '240px', height: '240px', position: 'relative', flexShrink: 0, outline: 'none' }}>
                               <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                   <Pie
@@ -1345,21 +1350,33 @@ function App() {
                                     nameKey="name"
                                     cx="50%"
                                     cy="50%"
-                                    innerRadius={65}
-                                    outerRadius={95}
-                                    paddingAngle={4}
+                                    innerRadius={70}
+                                    outerRadius={102}
+                                    paddingAngle={5}
+                                    cornerRadius={6}
+                                    onMouseEnter={(_, index) => setHoveredPieCategory(stats.category_spend[index])}
+                                    onMouseLeave={() => setHoveredPieCategory(null)}
+                                    cursor="pointer"
                                   >
-                                    {stats.category_spend.map((entry, index) => (
-                                      <Cell 
-                                        key={`cell-${index}`} 
-                                        fill={CATEGORY_COLORS[entry.name] || DEFAULT_COLOR} 
-                                      />
-                                    ))}
+                                    {stats.category_spend.map((entry, index) => {
+                                      const isHovered = hoveredPieCategory && hoveredPieCategory.name === entry.name;
+                                      return (
+                                        <Cell 
+                                          key={`cell-${index}`} 
+                                          fill={CATEGORY_COLORS[entry.name] || DEFAULT_COLOR} 
+                                          stroke={isHovered ? '#ffffff' : 'transparent'}
+                                          strokeWidth={isHovered ? 3 : 0}
+                                          style={{
+                                            filter: `drop-shadow(0px 6px 12px ${CATEGORY_COLORS[entry.name] || DEFAULT_COLOR}40)`,
+                                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            transform: isHovered ? 'scale(1.03)' : 'scale(1)',
+                                            transformOrigin: 'center'
+                                          }}
+                                        />
+                                      );
+                                    })}
                                   </Pie>
-                                  <Tooltip 
-                                    formatter={(value) => `Rs.${value.toLocaleString()}`}
-                                    contentStyle={{ background: '#ffffff', border: '1px solid #c7d2fe', borderRadius: '12px', color: '#0f172a', boxShadow: '0 8px 24px rgba(99, 102, 241, 0.15)', fontWeight: 700 }}
-                                  />
+                                  <Tooltip content={() => null} />
                                 </PieChart>
                               </ResponsiveContainer>
 
