@@ -67,7 +67,9 @@ def evaluate_model_accuracy(df):
     # 1. Evaluate Prophet
     df_prophet_train = train_df.rename(columns={"date": "ds", "balance": "y"})
     try:
-        m = Prophet(yearly_seasonality=True, weekly_seasonality=True, daily_seasonality=False)
+        # Disable yearly seasonality for datasets < 730 days to prevent under-identified curve fitting;
+        # Set higher changepoint flexibility (0.5) to capture discrete transaction step-changes.
+        m = Prophet(yearly_seasonality=False, weekly_seasonality=True, daily_seasonality=False, changepoint_prior_scale=0.5)
         m.fit(df_prophet_train)
         future = m.make_future_dataframe(periods=30)
         forecast = m.predict(future)
@@ -116,7 +118,7 @@ def get_forecasts():
     
     # 2. Train Prophet on full dataset
     df_prophet_full = df.rename(columns={"date": "ds", "balance": "y"})
-    m = Prophet(yearly_seasonality=True, weekly_seasonality=True, daily_seasonality=False)
+    m = Prophet(yearly_seasonality=False, weekly_seasonality=True, daily_seasonality=False, changepoint_prior_scale=0.5)
     m.fit(df_prophet_full)
     future = m.make_future_dataframe(periods=30)
     forecast = m.predict(future)
