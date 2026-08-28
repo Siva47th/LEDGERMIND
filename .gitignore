@@ -31,3 +31,8 @@ data/real_invoices/
 backend/data/chroma_db/
 backend/temp_uploads/
 
+# Heavy Raw Kaggle Datasets
+needchange/archive/
+needchange/archiver/
+
+

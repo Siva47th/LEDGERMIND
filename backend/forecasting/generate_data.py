@@ -1,5 +1,6 @@
 import os
 import csv
+import json
 import random
 import sqlite3
 import pandas as pd
@@ -9,6 +10,7 @@ DB_NAME = "finsense.db"
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), DB_NAME)
 CSV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "synthetic")
 CSV_PATH = os.path.join(CSV_DIR, "historical_cashflow.csv")
+SIVAM_JSON_PATH = os.path.join(CSV_DIR, "sivam_traders_transactions.json")
 
 # Read starting balance from environment (single source of truth)
 STARTING_BALANCE = float(os.environ.get("STARTING_BALANCE", 250000.0))
@@ -47,6 +49,29 @@ def generate_historical_cashflow(days=365):
             print(f"[Data Gen] Warning: Could not read database transactions: {e}")
     else:
         print(f"[Data Gen] Warning: Database not found at {DB_PATH}. Generating baseline synthetic data only.")
+
+    # 1b. Overlay Sivam Traders persona transactions from JSON
+    if os.path.exists(SIVAM_JSON_PATH):
+        try:
+            with open(SIVAM_JSON_PATH, "r", encoding="utf-8") as f:
+                sivam_data = json.load(f)
+            sivam_count = 0
+            for txn in sivam_data:
+                date_str = txn["date"]
+                if date_str not in actual_transactions:
+                    actual_transactions[date_str] = []
+                actual_transactions[date_str].append({
+                    "amount": txn["amount"],
+                    "vendor": txn["vendor"],
+                    "transaction_type": txn["type"],
+                    "user_notes": txn.get("case_description", "")[:80]
+                })
+                sivam_count += 1
+            print(f"[Data Gen] Loaded {sivam_count} Sivam Traders persona transactions from JSON.")
+        except Exception as e:
+            print(f"[Data Gen] Warning: Could not read Sivam Traders JSON: {e}")
+    else:
+        print(f"[Data Gen] Note: Sivam Traders JSON not found at {SIVAM_JSON_PATH}. Skipping persona overlay.")
 
     # 2. Build timeline
     end_date = datetime.now().date()

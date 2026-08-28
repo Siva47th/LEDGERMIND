@@ -152,12 +152,14 @@ function App() {
   const [advisorError, setAdvisorError] = useState(null);
   const [advisorLang, setAdvisorLang] = useState('en'); // 'en' | 'ta'
   const [isListening, setIsListening] = useState(false);
+  const [isVoiceCaptured, setIsVoiceCaptured] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const currentAudioRef = useRef(null);
 
   const handleAdvisorSubmit = async (queryText) => {
     const q = queryText || advisorQuery;
     if (!q || !q.trim()) return;
+    setIsVoiceCaptured(false);
 
     // Auto-detect Tamil characters in query
     const hasTamilScript = /[\u0B80-\u0BFF]/.test(q);
@@ -203,7 +205,10 @@ function App() {
       recognition.interimResults = false;
       recognition.lang = advisorLang === 'ta' ? 'ta-IN' : 'en-US';
 
-      recognition.onstart = () => setIsListening(true);
+      recognition.onstart = () => {
+        setIsListening(true);
+        setIsVoiceCaptured(false);
+      };
       recognition.onend = () => setIsListening(false);
       recognition.onerror = (e) => {
         console.error('Speech recognition error:', e);
@@ -214,7 +219,7 @@ function App() {
         const transcript = event.results[0][0].transcript;
         if (transcript) {
           setAdvisorQuery(transcript);
-          handleAdvisorSubmit(transcript);
+          setIsVoiceCaptured(true);
         }
       };
 
@@ -338,10 +343,10 @@ function App() {
       clean = clean.replace(/\[\s*[A-Za-z0-9\s,&.'"-]+\s*\]/g, ' ');
 
       // 2. Comprehensive English to Tamil phonetic mapping for any standalone English vendor/case names
-      clean = clean.replace(/Anna University Fees/gi, 'அண்ணா பல்கலைக்கழக கட்டணம்');
-      clean = clean.replace(/Dell India/gi, 'டெல் கணினி நிறுவனம்');
-      clean = clean.replace(/Croma Electronics/gi, 'க்ரோமா எலக்ட்ரானிக்ஸ்');
-      clean = clean.replace(/IFET College/gi, 'ஐஎஃப்ஈடி கல்லூரி');
+      clean = clean.replace(/ABC Traders/gi, 'ஏபிசி டிரேடர்ஸ்');
+      clean = clean.replace(/CloudHost Technologies/gi, 'கிளவ்ட்ஹோஸ்ட் டெக்னாலஜிஸ்');
+      clean = clean.replace(/Kothari & Associates/gi, 'கோத்தாரி அண்ட் அசோசியேட்ஸ்');
+      clean = clean.replace(/Sharma Logistics/gi, 'சர்மா லாஜிஸ்டிக்ஸ்');
       clean = clean.replace(/Google Workspace/gi, 'கூகிள் மென்பொருள்');
       clean = clean.replace(/Logitech India/gi, 'லாஜிடெக் நிறுவனம்');
       clean = clean.replace(/Apex Enterprises/gi, 'ஏபெக்ஸ் நிறுவனம்');
@@ -528,6 +533,62 @@ function App() {
   const [casesList, setCasesList] = useState([]);
   const [casesLoading, setCasesLoading] = useState(false);
   const [casesSearch, setCasesSearch] = useState('');
+  const [showAddCaseModal, setShowAddCaseModal] = useState(false);
+  const [caseForm, setCaseForm] = useState({
+    vendor_or_client: '',
+    amount: '',
+    transaction_type: 'expense',
+    category: 'Miscellaneous',
+    outcome: 'healthy',
+    notes: ''
+  });
+  const [caseSubmitting, setCaseSubmitting] = useState(false);
+
+  const handleAddCaseSubmit = async (e) => {
+    e.preventDefault();
+    if (!caseForm.vendor_or_client || !caseForm.amount) {
+      alert('Please enter vendor/client name and amount.');
+      return;
+    }
+
+    setCaseSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/cases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendor_or_client: caseForm.vendor_or_client,
+          amount: parseFloat(caseForm.amount),
+          transaction_type: caseForm.transaction_type,
+          category: caseForm.category,
+          outcome: caseForm.outcome,
+          notes: caseForm.notes
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to create case memory');
+      }
+
+      alert('New case memory indexed in ChromaDB successfully!');
+      setShowAddCaseModal(false);
+      setCaseForm({
+        vendor_or_client: '',
+        amount: '',
+        transaction_type: 'expense',
+        category: 'Miscellaneous',
+        outcome: 'healthy',
+        notes: ''
+      });
+      fetchCases();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Failed to create case memory');
+    } finally {
+      setCaseSubmitting(false);
+    }
+  };
 
   // Anomalies State
   const [anomaliesMap, setAnomaliesMap] = useState({});
@@ -759,35 +820,20 @@ function App() {
     document.body.removeChild(link);
   };
 
-  const downloadSingleInvoice = async (txn) => {
-    try {
-      const invoiceNumber = `INV-${String(txn.id).padStart(5, '0')}`;
-      const cleanVendor = String(txn.vendor_or_client || 'Record').replace(/[^a-zA-Z0-9]/g, '_');
-      const filename = `FinSense_Invoice_${invoiceNumber}_${cleanVendor}.pdf`;
+  const downloadSingleInvoice = (txn) => {
+    const invoiceNumber = `INV-${String(txn.id).padStart(5, '0')}`;
+    const cleanVendor = String(txn.vendor_or_client || 'Record').replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `FinSense_Invoice_${invoiceNumber}_${cleanVendor}.pdf`;
 
-      const res = await fetch(`${API_BASE}/invoices/${txn.id}/pdf`);
-      if (!res.ok) throw new Error('PDF fetch failed');
-      const blob = await res.blob();
-
-      // Create an authentic application/pdf File object with metadata for Chrome & Edge
-      const file = new File([blob], filename, { type: 'application/pdf' });
-      const fileUrl = window.URL.createObjectURL(file);
-
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = fileUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-
-      setTimeout(() => {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(fileUrl);
-      }, 1000);
-    } catch (err) {
-      console.warn('Direct PDF fetch fallback:', err);
-      window.location.href = `${API_BASE}/invoices/${txn.id}/pdf`;
-    }
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = `${API_BASE}/invoices/${txn.id}/pdf`;
+    a.setAttribute('download', filename);
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      if (a.parentNode) document.body.removeChild(a);
+    }, 1000);
   };
 
   const saveOutcomeLabel = async (txnId, newOutcome) => {
@@ -1301,7 +1347,7 @@ function App() {
                               {stats.category_spend.map((entry, idx) => {
                                 const percentage = totalSpend > 0 ? ((entry.value / totalSpend) * 100).toFixed(1) : 0;
                                 return (
-                                  <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.95rem', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe', boxShadow: '0 2px 8px rgba(99, 102, 241, 0.05)' }}>
+                                  <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.95rem', borderRadius: '12px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                       <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: CATEGORY_COLORS[entry.name] || DEFAULT_COLOR, flexShrink: 0, boxShadow: `0 0 8px ${CATEGORY_COLORS[entry.name] || DEFAULT_COLOR}` }}></span>
                                       <div style={{ textAlign: 'left' }}>
@@ -1910,7 +1956,7 @@ function App() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center', padding: '2rem 1rem' }}>
                     <AlertCircle size={40} color="#ef4444" />
                     <div style={{ textAlign: 'center' }}>
-                      <h4 style={{ margin: 0, fontWeight: 700, color: 'white' }}>Processing Failed</h4>
+                      <h4 style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>Processing Failed</h4>
                       <p style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0.5rem 0' }}>
                         {uploadState.error}
                       </p>
@@ -2038,7 +2084,7 @@ function App() {
                             data={getCombinedChartData()}
                             margin={{ top: 10, right: 30, left: 20, bottom: 10 }}
                           >
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(99, 102, 241, 0.08)" />
                             <XAxis 
                               dataKey="date" 
                               stroke="#64748b" 
@@ -2098,7 +2144,7 @@ function App() {
                         <button
                           className="btn-primary"
                           onClick={downloadAuditCSV}
-                          style={{ padding: '0.45rem 1.15rem', fontSize: '0.78rem', background: 'rgba(255,255,255,0.04)', color: 'white', border: '1px solid rgba(255,255,255,0.08)' }}
+                          style={{ padding: '0.45rem 1.15rem', fontSize: '0.78rem', background: '#ffffff', color: '#0f172a', border: '1px solid #e2e8f0', fontWeight: 700 }}
                         >
                           Export Audit Trail (.CSV)
                         </button>
@@ -2157,7 +2203,7 @@ function App() {
             {activeTab === 'advisor' && (
               <div className="tab-content fade-in">
                 {/* Advisor Hero Query Box */}
-                <div className="glass-card" style={{ padding: '2rem', marginBottom: '2rem', background: 'rgba(255, 255, 255, 0.75)', borderRadius: '20px', border: '1px solid rgba(255, 255, 255, 0.9)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.1)' }}>
+                <div className="glass-card" style={{ padding: '2rem', marginBottom: '2rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                       <div style={{ padding: '0.5rem', background: 'linear-gradient(135deg, #6366f1, #3b82f6)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
@@ -2170,7 +2216,7 @@ function App() {
                     </div>
 
                     {/* Language Selector Toggle */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(199, 210, 254, 0.35)', padding: '0.3rem', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.7)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#f1f5f9', padding: '0.3rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                       <Globe size={16} color="#4f46e5" style={{ marginLeft: '0.4rem' }} />
                       <button
                         type="button"
@@ -2216,7 +2262,7 @@ function App() {
                         placeholder={advisorLang === 'ta' ? "உதாரணம்: 5 புதிய லேப்டாப்கள் ₹75,000க்கு வாங்கலாமா?" : "e.g. Should I spend Rs. 75,000 on 5 development laptops for our engineering team?"}
                         value={advisorQuery}
                         onChange={(e) => setAdvisorQuery(e.target.value)}
-                        style={{ width: '100%', padding: '0.9rem 3.5rem 0.9rem 1.2rem', fontSize: '0.95rem', borderRadius: '14px', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe', color: '#0f172a' }}
+                        style={{ width: '100%', padding: '0.9rem 3.5rem 0.9rem 1.2rem', fontSize: '0.95rem', borderRadius: '12px', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a' }}
                       />
                       <button
                         type="button"
@@ -2273,20 +2319,70 @@ function App() {
                     </button>
                   </form>
 
+                  {/* Voice Verification Prompt Banner */}
+                  {isVoiceCaptured && (
+                    <div style={{
+                      marginTop: '0.85rem',
+                      padding: '0.75rem 1rem',
+                      background: 'linear-gradient(135deg, #fffbe6, #fef3c7)',
+                      border: '1px solid #f59e0b',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '0.75rem',
+                      boxShadow: '0 4px 12px rgba(245, 158, 11, 0.15)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#92400e', fontWeight: 600, fontSize: '0.85rem' }}>
+                        <CheckCircle size={18} color="#d97706" />
+                        <span>
+                          {advisorLang === 'ta'
+                            ? 'குரல் கேள்வி பெறப்பட்டது! உள்ளீட்டுப் பெட்டியில் உள்ள கேள்வியை சரிபார்த்து "Get Advice" அழுத்தவும்.'
+                            : 'Voice question captured! Please verify your question in the text box above, edit if needed, and click "Get Advice".'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAdvisorSubmit()}
+                        style={{
+                          background: 'linear-gradient(135deg, #d97706, #b45309)',
+                          color: '#ffffff',
+                          border: 'none',
+                          padding: '0.45rem 1rem',
+                          borderRadius: '10px',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          boxShadow: '0 2px 6px rgba(217, 119, 6, 0.3)'
+                        }}
+                      >
+                        <Sparkles size={14} />
+                        <span>{advisorLang === 'ta' ? 'கேள்வியை அனுப்பவும்' : 'Confirm & Ask'}</span>
+                      </button>
+                    </div>
+                  )}
+
                   {/* Sample Query Suggestions */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '1rem', alignItems: 'center' }}>
                     <span style={{ fontSize: '0.75rem', color: '#334155', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                       <Lightbulb size={14} color="#d97706" /> Sample Queries:
                     </span>
                     {(advisorLang === 'ta' ? [
-                      '1,50,000 இலிருந்து ஐஃபோன் வாங்கலாமா?',
-                      '35,000-க்கு லேப்டாப் வாங்கலாமா?',
-                      '45,000 கல்லூரி கட்டணம் செலுத்தலாமா?'
+                      'ABC டிரேடர்ஸிடம் ₹45,000-க்கு சரக்கு வாங்கலாமா?',
+                      'கடையின் மாத வாடகை ₹30,000 செலுத்த ரொக்கம் போதுமா?',
+                      'விளம்பரத்திற்காக ₹15,000 செலவு செய்யலாமா?',
+                      'கடைக்கு ₹18,500-க்கு பில்லிங் பிரிண்டர் வாங்கலாமா?',
+                      'ஊழியர் சம்பளம் ₹75,000 வழங்க பணப்புழக்கம் சரியா?'
                     ] : [
-                      'Should I buy 5 new laptops for Rs. 75,000?',
-                      'Can we afford Rs. 35,000 for Google Ads search marketing?',
-                      'Will paying office lease rent of Rs. 45,000 strain our cash balance?',
-                      'Should I purchase an Enterprise ERP software subscription for Rs. 85,000?'
+                      'Can I spend Rs. 45,000 for inventory restock from ABC Traders?',
+                      'Will paying store lease rent of Rs. 30,000 strain our cash balance?',
+                      'Can we afford Rs. 15,000 for Meta Ads marketing campaign?',
+                      'Should I buy a new POS billing printer for Rs. 18,500?',
+                      'Is our cash balance healthy for month-end payroll of Rs. 75,000?'
                     ]).map((sample, idx) => (
                       <button
                         key={idx}
@@ -2295,8 +2391,8 @@ function App() {
                           handleAdvisorSubmit(sample);
                         }}
                         style={{
-                          background: 'rgba(255, 255, 255, 0.85)',
-                          border: '1px solid #c7d2fe',
+                          background: '#ffffff',
+                          border: '1px solid #e2e8f0',
                           borderRadius: '20px',
                           color: '#1e293b',
                           fontWeight: 600,
@@ -2331,7 +2427,7 @@ function App() {
                       {(() => {
                         const isQueryTamil = advisorQuery && isTamilScript(advisorQuery);
                         return (
-                          <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '20px', border: `1px solid ${advisorResult.verdict === 'Recommended' ? '#bbf7d0' : advisorResult.verdict === 'Proceed with Caution' ? '#fde68a' : '#fca5a5'}`, background: 'rgba(255, 255, 255, 0.85)', boxShadow: '0 10px 30px -5px rgba(99, 102, 241, 0.08)', overflow: 'hidden' }}>
+                          <div className="glass-card" style={{ padding: '1.75rem', border: `1px solid ${advisorResult.verdict === 'Recommended' ? '#dcfce7' : advisorResult.verdict === 'Proceed with Caution' ? '#fef3c7' : '#fecaca'}`, overflow: 'hidden' }}>
                             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
                               <div style={{ minWidth: '180px', flex: '1 1 auto' }}>
                                 <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -2400,7 +2496,7 @@ function App() {
                               </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', padding: '1rem', background: 'rgba(255, 255, 255, 0.65)', borderRadius: '14px', marginBottom: '1rem', border: '1px solid #c7d2fe' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '12px', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
                               <div>
                                 <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>
                                   {isQueryTamil ? 'தற்போதைய ரொக்க இருப்பு' : 'Current Cash Balance'}
@@ -2418,7 +2514,7 @@ function App() {
                             </div>
 
                             {advisorResult.suggested_action && (
-                              <div style={{ fontSize: '0.85rem', color: '#0f172a', fontWeight: 600, background: '#eef2ff', padding: '0.75rem 1rem', borderRadius: '12px', borderLeft: '4px solid #4338ca', border: '1px solid #c7d2fe' }}>
+                              <div style={{ fontSize: '0.85rem', color: '#0f172a', fontWeight: 600, background: '#eef2ff', padding: '0.75rem 1rem', borderRadius: '12px', borderLeft: '4px solid #4338ca', border: '1px solid #e0e7ff' }}>
                                 <strong style={{ color: '#4338ca' }}>
                                   {isQueryTamil ? 'பரிந்துரைக்கப்பட்ட அடுத்த கட்ட நடவடிக்கை:' : 'Suggested Next Step:'}
                                 </strong> {advisorResult.suggested_action}
@@ -2429,7 +2525,7 @@ function App() {
                       })()}
 
                       {/* Adaptive Blending Algorithm Card */}
-                      <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '20px', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
+                      <div className="glass-card" style={{ padding: '1.75rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
                           <Bot size={20} color="#4338ca" />
                           <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Adaptive Blending Calibration</h4>
@@ -2444,18 +2540,18 @@ function App() {
                             <span>Case Memory Weight ({Math.round(advisorResult.blend_weight * 100)}%)</span>
                             <span>Rule Baseline ({Math.round((1 - advisorResult.blend_weight) * 100)}%)</span>
                           </div>
-                          <div style={{ height: '10px', background: '#e0e7ff', borderRadius: '10px', overflow: 'hidden', display: 'flex' }}>
-                            <div style={{ width: `${advisorResult.blend_weight * 100}%`, background: 'linear-gradient(90deg, #4338ca, #3b82f6)', transition: 'width 0.5s ease' }}></div>
+                          <div style={{ height: '10px', background: '#f1f5f9', borderRadius: '10px', overflow: 'hidden', display: 'flex' }}>
+                            <div style={{ width: `${advisorResult.blend_weight * 100}%`, background: '#4f46e5', transition: 'width 0.5s ease' }}></div>
                             <div style={{ width: `${(1 - advisorResult.blend_weight) * 100}%`, background: '#cbd5e1' }}></div>
                           </div>
                         </div>
 
                         <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: '#0f172a' }}>
-                          <div style={{ flex: 1, padding: '0.6rem', background: 'rgba(255,255,255,0.65)', border: '1px solid #c7d2fe', borderRadius: '10px', textAlign: 'center' }}>
+                          <div style={{ flex: 1, padding: '0.6rem', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', textAlign: 'center' }}>
                             <div style={{ color: '#4338ca', fontWeight: 800, fontSize: '0.95rem' }}>{advisorResult.retrieved_cases?.length || 0}</div>
                             <div style={{ color: '#475569', fontWeight: 700 }}>Retrieved Cases</div>
                           </div>
-                          <div style={{ flex: 1, padding: '0.6rem', background: 'rgba(255,255,255,0.65)', border: '1px solid #c7d2fe', borderRadius: '10px', textAlign: 'center' }}>
+                          <div style={{ flex: 1, padding: '0.6rem', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', textAlign: 'center' }}>
                             <div style={{ color: '#166534', fontWeight: 800, fontSize: '0.95rem' }}>ChromaDB</div>
                             <div style={{ color: '#475569', fontWeight: 700 }}>Vector Index</div>
                           </div>
@@ -2464,7 +2560,7 @@ function App() {
                     </div>
 
                     {/* Middle Row: Explainable LLM Reasoning & Key Rationale */}
-                    <div className="glass-card" style={{ padding: '2rem', borderRadius: '20px', marginBottom: '1.5rem', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
+                    <div className="glass-card" style={{ padding: '2rem', marginBottom: '1.5rem' }}>
                       <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <Sparkles size={20} color="#4338ca" />
                         {advisorQuery && isTamilScript(advisorQuery) ? 'விளக்கமளிக்கப்பட்ட பரிந்துரை காரணம்' : 'Explainable Recommendation Rationale'}
@@ -2481,7 +2577,7 @@ function App() {
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             {advisorResult.key_factors.map((factor, idx) => (
-                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem', color: '#0f172a', fontWeight: 600, background: 'rgba(255,255,255,0.65)', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #c7d2fe' }}>
+                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem', color: '#0f172a', fontWeight: 600, background: '#f8fafc', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                                 <CheckCircle size={16} color="#166534" />
                                 <span>{factor}</span>
                               </div>
@@ -2492,7 +2588,7 @@ function App() {
                     </div>
 
                     {/* Bottom Row: Retrieved Vector Case Memories from ChromaDB */}
-                    <div className="glass-card" style={{ padding: '2rem', borderRadius: '20px', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
+                    <div className="glass-card" style={{ padding: '2rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                         <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <Tag size={20} color="#4338ca" />
@@ -2547,7 +2643,7 @@ function App() {
             {/* Case Memory Viewer Tab */}
             {activeTab === 'cases' && (
               <div className="tab-content fade-in">
-                <div className="glass-card" style={{ padding: '2rem', borderRadius: '20px', marginBottom: '1.5rem', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
+                <div className="glass-card" style={{ padding: '2rem', marginBottom: '1.5rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
                     <div>
                       <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -2559,15 +2655,152 @@ function App() {
                       </p>
                     </div>
 
-                    <input 
-                      type="text"
-                      className="search-input"
-                      placeholder="Search cases by vendor, category, or notes..."
-                      value={casesSearch}
-                      onChange={(e) => setCasesSearch(e.target.value)}
-                      style={{ width: '280px', padding: '0.6rem 1rem', fontSize: '0.85rem', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.9)', border: '1px solid #c7d2fe', color: '#0f172a' }}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <button
+                        className="btn-primary"
+                        onClick={() => setShowAddCaseModal(true)}
+                        style={{ background: '#4338ca', color: '#ffffff', border: 'none', fontWeight: 800, padding: '0.6rem 1.1rem', fontSize: '0.85rem' }}
+                      >
+                        + Create Case Memory
+                      </button>
+                      <input 
+                        type="text"
+                        className="search-input"
+                        placeholder="Search cases by vendor, category, or notes..."
+                        value={casesSearch}
+                        onChange={(e) => setCasesSearch(e.target.value)}
+                        style={{ width: '260px', padding: '0.6rem 1rem', fontSize: '0.85rem', borderRadius: '10px', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a' }}
+                      />
+                    </div>
                   </div>
+
+                  {/* Manual Case Creation Modal */}
+                  {showAddCaseModal && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                      <div className="glass-card fade-in" style={{ width: '100%', maxWidth: '520px', background: '#ffffff', border: '1px solid #cbd5e1', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', borderRadius: '16px', padding: '2rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                          <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Database size={20} color="#4338ca" />
+                            Create Custom Case Memory
+                          </h3>
+                          <button
+                            onClick={() => setShowAddCaseModal(false)}
+                            style={{ background: 'transparent', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: '#64748b', fontWeight: 700 }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '0 0 1.25rem 0', fontWeight: 500 }}>
+                          Directly index a past financial decision, vendor experience, or spending outcome into ChromaDB vector store for RAG reasoning.
+                        </p>
+
+                        <form onSubmit={handleAddCaseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', textAlign: 'left' }}>
+                          <div className="field-group">
+                            <label style={{ color: '#0f172a', fontSize: '0.78rem', fontWeight: 800 }}>Vendor / Client Name</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Dell India, Anna University"
+                              value={caseForm.vendor_or_client}
+                              onChange={(e) => setCaseForm({ ...caseForm, vendor_or_client: e.target.value })}
+                              required
+                              style={{ padding: '0.6rem 0.85rem', fontSize: '0.88rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div className="field-group">
+                              <label style={{ color: '#0f172a', fontSize: '0.78rem', fontWeight: 800 }}>Amount (Rs.)</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={caseForm.amount}
+                                onChange={(e) => setCaseForm({ ...caseForm, amount: e.target.value })}
+                                required
+                                style={{ padding: '0.6rem 0.85rem', fontSize: '0.88rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                              />
+                            </div>
+
+                            <div className="field-group">
+                              <label style={{ color: '#0f172a', fontSize: '0.78rem', fontWeight: 800 }}>Transaction Type</label>
+                              <select
+                                value={caseForm.transaction_type}
+                                onChange={(e) => setCaseForm({ ...caseForm, transaction_type: e.target.value })}
+                                style={{ padding: '0.6rem 0.85rem', fontSize: '0.88rem', borderRadius: '8px', border: '1px solid #e2e8f0', height: '39px', fontWeight: 600 }}
+                              >
+                                <option value="expense">↓ Expense</option>
+                                <option value="income">↑ Income</option>
+                                <option value="return_in">↑ Return In</option>
+                                <option value="return_out">↓ Refund Out</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div className="field-group">
+                              <label style={{ color: '#0f172a', fontSize: '0.78rem', fontWeight: 800 }}>Category</label>
+                              <select
+                                value={caseForm.category}
+                                onChange={(e) => setCaseForm({ ...caseForm, category: e.target.value })}
+                                style={{ padding: '0.6rem 0.85rem', fontSize: '0.88rem', borderRadius: '8px', border: '1px solid #e2e8f0', height: '39px', fontWeight: 600 }}
+                              >
+                                <option value="Miscellaneous">Miscellaneous</option>
+                                <option value="Shopping">Shopping</option>
+                                <option value="Software">Software</option>
+                                <option value="Utilities">Utilities</option>
+                                <option value="Marketing">Marketing</option>
+                                <option value="Financial">Financial</option>
+                                <option value="Education">Education</option>
+                              </select>
+                            </div>
+
+                            <div className="field-group">
+                              <label style={{ color: '#0f172a', fontSize: '0.78rem', fontWeight: 800 }}>Assigned Outcome Memory</label>
+                              <select
+                                value={caseForm.outcome}
+                                onChange={(e) => setCaseForm({ ...caseForm, outcome: e.target.value })}
+                                style={{ padding: '0.6rem 0.85rem', fontSize: '0.88rem', borderRadius: '8px', border: '1px solid #e2e8f0', height: '39px', fontWeight: 700, color: caseForm.outcome === 'healthy' || caseForm.outcome === 'Productive' ? '#166534' : '#b91c1c' }}
+                              >
+                                <option value="healthy">Healthy (Low Risk)</option>
+                                <option value="strained">Strained (Cash Deficit)</option>
+                                <option value="Productive">Productive (High ROI)</option>
+                                <option value="Necessary">Necessary (Operational)</option>
+                                <option value="Wasteful">Wasteful (Low ROI)</option>
+                                <option value="Pending Review">Pending Review</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="field-group">
+                            <label style={{ color: '#0f172a', fontSize: '0.78rem', fontWeight: 800 }}>Decision Rationale / Experience Notes</label>
+                            <textarea
+                              placeholder="Describe the context, decision outcome, or lesson learned (e.g. Caused temporary cash crunch, but boosted dev speed...)"
+                              value={caseForm.notes}
+                              onChange={(e) => setCaseForm({ ...caseForm, notes: e.target.value })}
+                              style={{ padding: '0.6rem 0.85rem', fontSize: '0.88rem', borderRadius: '8px', border: '1px solid #e2e8f0', minHeight: '75px', resize: 'vertical', fontWeight: 500 }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.75rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => setShowAddCaseModal(false)}
+                              style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontWeight: 700, cursor: 'pointer' }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={caseSubmitting}
+                              style={{ padding: '0.6rem 1.5rem', borderRadius: '8px', border: 'none', background: '#4338ca', color: '#ffffff', fontWeight: 800, cursor: caseSubmitting ? 'not-allowed' : 'pointer' }}
+                            >
+                              {caseSubmitting ? 'Indexing...' : 'Save to Case Memory'}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
 
                   {casesLoading ? (
                     <div style={{ padding: '3rem', textAlign: 'center', color: '#475569', fontWeight: 600 }}>
@@ -2579,7 +2812,7 @@ function App() {
                       {casesList
                         .filter(c => !casesSearch || (c.vendor_or_client + ' ' + c.category + ' ' + c.notes).toLowerCase().includes(casesSearch.toLowerCase()))
                         .map((c, idx) => (
-                          <div key={idx} style={{ padding: '1.2rem', borderRadius: '16px', background: 'rgba(255, 255, 255, 0.65)', border: '1px solid #c7d2fe', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                          <div key={idx} style={{ padding: '1.2rem', borderRadius: '14px', background: '#ffffff', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                             <div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
                                 <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>{c.vendor_or_client}</span>
@@ -2620,7 +2853,7 @@ function App() {
             {/* System Settings Tab */}
             {activeTab === 'settings' && (
               <div className="tab-content fade-in">
-                <div className="glass-card" style={{ padding: '2rem', maxWidth: '650px', margin: '0 auto', borderRadius: '20px', background: 'rgba(255, 255, 255, 0.85)', border: '1px solid #c7d2fe' }}>
+                <div className="glass-card" style={{ padding: '2rem', maxWidth: '650px', margin: '0 auto' }}>
                   <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Sliders size={22} color="#4338ca" />
                     System & Business Configuration

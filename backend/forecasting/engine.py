@@ -3,7 +3,47 @@ import logging
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
-from prophet import Prophet
+try:
+    from prophet import Prophet
+    PROPHET_AVAILABLE = True
+except ImportError:
+    PROPHET_AVAILABLE = False
+    print("[Forecasting Engine Warning] 'prophet' module not found. Using trend regression fallback.")
+
+    class Prophet:
+        """Fallback predictor when prophet library is unavailable."""
+        def __init__(self, **kwargs):
+            self.slope = 0
+            self.intercept = 0
+            self.std = 0
+            
+        def fit(self, df):
+            y = df["y"].values
+            x = np.arange(len(y))
+            if len(y) > 1:
+                self.slope, self.intercept = np.polyfit(x, y, 1)
+                preds = self.slope * x + self.intercept
+                self.std = float(np.std(y - preds))
+            else:
+                self.intercept = y[0] if len(y) > 0 else 100000
+
+        def make_future_dataframe(self, periods=30, **kwargs):
+            return periods
+
+        def predict(self, future):
+            # Simulated dataframe with ds, yhat, yhat_lower, yhat_upper
+            last_date = datetime.now()
+            n = future if isinstance(future, int) else 30
+            dates = [last_date + timedelta(days=i+1) for i in range(n)]
+            x_future = np.arange(n)
+            yhat = self.slope * x_future + self.intercept
+            return pd.DataFrame({
+                "ds": dates,
+                "yhat": yhat,
+                "yhat_lower": yhat - 1.96 * self.std,
+                "yhat_upper": yhat + 1.96 * self.std
+            })
+
 from statsmodels.tsa.arima.model import ARIMA
 
 # Suppress annoying cmdstanpy logs to keep clean Flask console output

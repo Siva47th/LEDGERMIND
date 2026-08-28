@@ -467,6 +467,7 @@ def add_manual_transaction():
 def update_transaction_notes(txn_id):
     """
     Updates the user_notes / spend experience of any transaction in the ledger
+    and syncs the updated memory into ChromaDB vector store.
     """
     try:
         data = request.json
@@ -479,13 +480,28 @@ def update_transaction_notes(txn_id):
         cursor = conn.cursor()
         cursor.execute("UPDATE transactions SET user_notes = ? WHERE id = ?", (user_notes, txn_id))
         conn.commit()
+
+        cursor.execute("SELECT * FROM transactions WHERE id = ?", (txn_id,))
+        row = cursor.fetchone()
         conn.close()
 
-        # Re-run simulation so the notes bubble up to the CSV forecast descriptions
-        print(f"[API Notes] Updating notes for ID {txn_id}. Rebuilding daily cashflow...")
+        if row:
+            txn = dict(row)
+            outcome_val = txn.get("user_outcome") or txn.get("outcome_label", "healthy")
+            add_case_memory(
+                txn_id=txn["id"],
+                vendor_or_client=txn.get("vendor_or_client", ""),
+                amount=float(txn.get("amount", 0.0)),
+                transaction_type=txn.get("transaction_type", "expense"),
+                category=txn.get("category", "Miscellaneous"),
+                notes=user_notes,
+                outcome=outcome_val
+            )
+
+        print(f"[API Notes] Updating notes for ID {txn_id}. Rebuilding daily cashflow & synced ChromaDB...")
         generate_historical_cashflow()
 
-        return jsonify({"success": True, "message": "Transaction notes updated successfully"}), 200
+        return jsonify({"success": True, "message": "Transaction notes updated and synced to case memory successfully"}), 200
     except Exception as e:
         print(f"[API Notes Error] Failed to update notes: {e}")
         return jsonify({"error": f"Failed to save transaction notes: {str(e)}"}), 500
@@ -496,7 +512,7 @@ def update_transaction_outcome(txn_id):
     """
     Updates the user_outcome label for a transaction.
     This is a custom user-set label (e.g., 'Productive', 'Wasteful', 'Necessary')
-    that is separate from the system-computed outcome_label.
+    that is separate from the system-computed outcome_label, and syncs to ChromaDB.
     """
     try:
         data = request.json
@@ -509,10 +525,26 @@ def update_transaction_outcome(txn_id):
         cursor = conn.cursor()
         cursor.execute("UPDATE transactions SET user_outcome = ? WHERE id = ?", (user_outcome, txn_id))
         conn.commit()
+
+        cursor.execute("SELECT * FROM transactions WHERE id = ?", (txn_id,))
+        row = cursor.fetchone()
         conn.close()
 
-        print(f"[API Outcome] Updated user_outcome for transaction #{txn_id} to '{user_outcome}'")
-        return jsonify({"success": True, "message": f"Outcome label updated to '{user_outcome}'"}), 200
+        if row:
+            txn = dict(row)
+            outcome_val = user_outcome if user_outcome else txn.get("outcome_label", "healthy")
+            add_case_memory(
+                txn_id=txn["id"],
+                vendor_or_client=txn.get("vendor_or_client", ""),
+                amount=float(txn.get("amount", 0.0)),
+                transaction_type=txn.get("transaction_type", "expense"),
+                category=txn.get("category", "Miscellaneous"),
+                notes=txn.get("user_notes", ""),
+                outcome=outcome_val
+            )
+
+        print(f"[API Outcome] Updated user_outcome for transaction #{txn_id} to '{user_outcome}' and synced to ChromaDB")
+        return jsonify({"success": True, "message": f"Outcome label updated to '{user_outcome}' and indexed in case memory"}), 200
     except Exception as e:
         print(f"[API Outcome Error] Failed to update outcome: {e}")
         return jsonify({"error": f"Failed to update outcome label: {str(e)}"}), 500
@@ -872,11 +904,56 @@ def get_cashflow_forecast():
         return jsonify({"error": f"Failed to compute cash flow forecast: {str(e)}"}), 500
 
 
-@app.route("/api/cases", methods=["GET"])
-def get_cases():
+@app.route("/api/cases", methods=["GET", "POST"])
+def manage_cases():
     """
-    Returns all indexed small-business case memories from the ChromaDB vector database.
+    GET: Returns all indexed small-business case memories from ChromaDB.
+    POST: Manually creates a new case memory directly in ChromaDB vector store.
     """
+    if request.method == "POST":
+        try:
+            data = request.json or {}
+            vendor = data.get("vendor_or_client", "Manual Case")
+            amount = float(data.get("amount", 0.0))
+            txn_type = data.get("transaction_type", "expense")
+            category = data.get("category", "Miscellaneous")
+            outcome = data.get("outcome", "healthy")
+            notes = data.get("notes", "")
+
+            import time
+            case_id = int(time.time() * 1000)
+
+            success = add_case_memory(
+                txn_id=case_id,
+                vendor_or_client=vendor,
+                amount=amount,
+                transaction_type=txn_type,
+                category=category,
+                notes=notes,
+                outcome=outcome
+            )
+
+            if not success:
+                return jsonify({"error": "Failed to index case memory into ChromaDB"}), 500
+
+            return jsonify({
+                "success": True,
+                "message": "Case memory created and indexed in ChromaDB successfully",
+                "case": {
+                    "id": f"txn_{case_id}",
+                    "vendor_or_client": vendor,
+                    "amount": amount,
+                    "transaction_type": txn_type,
+                    "category": category,
+                    "outcome": outcome,
+                    "notes": notes
+                }
+            }), 201
+        except Exception as e:
+            print(f"[API Create Case Error] {e}")
+            return jsonify({"error": f"Failed to create case memory: {str(e)}"}), 500
+
+    # GET request
     try:
         cases = get_all_cases()
         return jsonify({
@@ -886,6 +963,7 @@ def get_cases():
     except Exception as e:
         print(f"[API Cases Error] Failed to fetch case memories: {e}")
         return jsonify({"error": f"Failed to fetch case memories: {str(e)}"}), 500
+
 
 
 @app.route("/api/cases/query", methods=["POST"])

@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import chromadb
 from chromadb.config import Settings
 
@@ -8,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 CHROMA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "chroma_db")
 COLLECTION_NAME = "finsense_cases"
+SIVAM_JSON_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "synthetic", "sivam_traders_transactions.json")
 
 # Global client and collection handles
 client = None
@@ -40,11 +42,11 @@ def seed_initial_cases():
     along with outcome labels ('healthy' or 'strained').
     """
     _, col = get_vector_store()
-    print("[Case Memory] Seeding/Updating small-business & family education case memory database...")
+    print("[Case Memory] Seeding/Updating SME small-business case memory database...")
 
     seed_cases = [
         # --- EQUIPMENT & HARDWARE ---
-        {"id": "case_101", "vendor": "Dell India", "amount": 65000.0, "type": "expense", "category": "Shopping", "outcome": "healthy", "notes": "Purchased core development laptop for new developer. Boosted delivery velocity."},
+        {"id": "case_101", "vendor": "Dell India", "amount": 65000.0, "type": "expense", "category": "Shopping", "outcome": "healthy", "notes": "Purchased core workstation laptop for store manager. Boosted billing velocity."},
         {"id": "case_102", "vendor": "Apple Store", "amount": 145000.0, "type": "expense", "category": "Shopping", "outcome": "strained", "notes": "Bought high-end MacBook Pro when cash reserve was tight. Strained cash balance below safety threshold."},
         {"id": "case_103", "vendor": "Croma Electronics", "amount": 28000.0, "type": "expense", "category": "Shopping", "outcome": "healthy", "notes": "Bought barcode scanner and POS receipt thermal printer for store counter."},
         {"id": "case_104", "vendor": "HP Store", "amount": 18500.0, "type": "expense", "category": "Shopping", "outcome": "healthy", "notes": "Purchased laser jet printer for office invoicing and dispatch billing."},
@@ -82,19 +84,14 @@ def seed_initial_cases():
         {"id": "case_603", "vendor": "National Wholesalers", "amount": 120000.0, "type": "expense", "category": "Shopping", "outcome": "strained", "notes": "Bulk inventory purchase right before festival season temporarily depleted liquid reserves."},
 
         # --- CLIENT REVENUE & INCOME ---
-        {"id": "case_701", "vendor": "Apex Enterprises (Client)", "amount": 150000.0, "type": "income", "category": "Financial", "outcome": "healthy", "notes": "Received final milestone payment for corporate consulting project."},
+        {"id": "case_701", "vendor": "Apex Enterprises (Client)", "amount": 150000.0, "type": "income", "category": "Financial", "outcome": "healthy", "notes": "Received final milestone payment for wholesale corporate order."},
         {"id": "case_702", "vendor": "Sri Lakshmi Supermarket (Store Sales)", "amount": 52552.50, "type": "income", "category": "Shopping", "outcome": "healthy", "notes": "Daily retail sales revenue settlement received via UPI and POS terminal."},
-        {"id": "case_703", "vendor": "Global Tech Solutions (Client)", "amount": 95000.0, "type": "income", "category": "Software", "outcome": "healthy", "notes": "Advance payment received for software implementation service contract."},
+        {"id": "case_703", "vendor": "Global Tech Solutions (Client)", "amount": 95000.0, "type": "income", "category": "Software", "outcome": "healthy", "notes": "Advance payment received for corporate supply contract."},
         {"id": "case_704", "vendor": "Star Retailers (Client)", "amount": 68000.0, "type": "income", "category": "Shopping", "outcome": "healthy", "notes": "Wholesale goods dispatch invoice cleared by client."},
 
         # --- REFUNDS & RETURNS ---
         {"id": "case_801", "vendor": "Dell India (Vendor Refund)", "amount": 8500.0, "type": "return_in", "category": "Shopping", "outcome": "healthy", "notes": "Received partial refund credited to account for returned damaged monitor."},
-        {"id": "case_802", "vendor": "Customer Refund Issued", "amount": 3200.0, "type": "return_out", "category": "Shopping", "outcome": "healthy", "notes": "Refund given to customer for returned defective item."},
-
-        # --- PERSONAL & FAMILY EDUCATION EXPENSES ---
-        {"id": "case_901", "vendor": "IFET College of Engineering", "amount": 50000.0, "type": "expense", "category": "Education", "outcome": "strained", "notes": "Paid annual college tuition fees of ₹50,000 for son. Caused temporary liquidity strain, but cash balance recovered within 3 weeks from store revenue."},
-        {"id": "case_902", "vendor": "Anna University Fees", "amount": 45000.0, "type": "expense", "category": "Education", "outcome": "strained", "notes": "Paid college semester tuition fee of ₹45,000 for son's degree. Required staggering equipment purchases to keep cash reserve above safety threshold."},
-        {"id": "case_903", "vendor": "School Annual Tuition", "amount": 25000.0, "type": "expense", "category": "Education", "outcome": "healthy", "notes": "Paid annual school admission & tuition fees of ₹25,000 for child. Budgeted in advance from accumulated monthly cash reserve."}
+        {"id": "case_802", "vendor": "Customer Refund Issued", "amount": 3200.0, "type": "return_out", "category": "Shopping", "outcome": "healthy", "notes": "Refund given to customer for returned defective item."}
     ]
 
     documents = []
@@ -118,9 +115,61 @@ def seed_initial_cases():
         })
         ids.append(case["id"])
 
+    # Delete any existing old entries (like case_901, case_902, case_903) from collection
+    try:
+        col.delete(ids=["case_901", "case_902", "case_903"])
+    except Exception:
+        pass
+
     # Batch upsert to ChromaDB
     col.upsert(documents=documents, metadatas=metadatas, ids=ids)
-    print(f"[Case Memory] Successfully seeded/updated {len(ids)} small-business & education case memories in ChromaDB!")
+    print(f"[Case Memory] Successfully seeded/updated {len(ids)} SME small-business case memories in ChromaDB!")
+
+    # --- Also seed from Sivam Traders persona dataset (if available) ---
+    if os.path.exists(SIVAM_JSON_PATH):
+        try:
+            with open(SIVAM_JSON_PATH, "r", encoding="utf-8") as f:
+                sivam_data = json.load(f)
+            
+            sivam_docs = []
+            sivam_metas = []
+            sivam_ids = []
+            
+            for idx, txn in enumerate(sivam_data):
+                case_id = f"sivam_{idx:04d}"
+                doc_text = txn.get("case_description", "")
+                if not doc_text:
+                    doc_text = (
+                        f"Transaction with {txn['vendor']} for amount Rs.{txn['amount']:.2f}. "
+                        f"Category: {txn['category']}, Type: {txn['type']}. "
+                        f"Outcome state: {txn.get('outcome_label', 'healthy')}."
+                    )
+                
+                sivam_docs.append(doc_text)
+                sivam_metas.append({
+                    "vendor_or_client": txn["vendor"],
+                    "amount": float(txn["amount"]),
+                    "transaction_type": txn["type"],
+                    "category": txn["category"],
+                    "outcome": txn.get("outcome_label", "healthy"),
+                    "notes": doc_text[:200]
+                })
+                sivam_ids.append(case_id)
+            
+            # Batch upsert in chunks of 100 to avoid memory issues
+            batch_size = 100
+            for i in range(0, len(sivam_ids), batch_size):
+                col.upsert(
+                    documents=sivam_docs[i:i+batch_size],
+                    metadatas=sivam_metas[i:i+batch_size],
+                    ids=sivam_ids[i:i+batch_size]
+                )
+            
+            print(f"[Case Memory] Seeded {len(sivam_ids)} Sivam Traders persona cases into ChromaDB!")
+        except Exception as e:
+            print(f"[Case Memory] Warning: Could not load Sivam Traders JSON for seeding: {e}")
+    else:
+        print(f"[Case Memory] Note: Sivam Traders JSON not found at {SIVAM_JSON_PATH}. Skipping persona seeding.")
 
 
 def add_case_memory(txn_id, vendor_or_client, amount, transaction_type, category, notes, outcome="healthy"):

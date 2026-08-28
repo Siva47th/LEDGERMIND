@@ -13,15 +13,18 @@ CATEGORY_KEYWORDS = {
 
 # Known vendors lookup for high accuracy (optional fallback)
 KNOWN_VENDORS = [
-    "IFET College of Engineering",
-    "Cashfree Care",
-    "Cashfree Payments",
-    "Cashfree",
-    "Sirphire",
+    "ABC Traders",
+    "CloudHost Technologies",
+    "CloudHost",
+    "Kothari & Associates",
+    "Sharma Logistics",
+    "Metro Cash & Carry",
+    "Package Craft India",
+    "Tally Solutions",
     "Google Cloud",
     "AWS",
     "Microsoft",
-    "GitHub"
+    "Cashfree"
 ]
 
 def clean_extracted_text(text):
@@ -211,11 +214,11 @@ def classify_transaction_type(raw_text, vendor):
         if keyword in cleaned_text:
             return "return_in"
 
-    # 4. Explicit expense override for educational fees, utilities, hostel fees, purchase orders
+    # 4. Explicit expense override for SME business expenses (vendor invoices, logistics, rent, CA fees, utilities)
     expense_keywords = [
-        "fee receipt", "tuition fee", "exam fee", "college of engineering",
-        "school fee", "admission fee", "hostel fee", "utility bill", "electricity bill",
-        "purchase order", "vendor invoice", "payable to", "bill to:"
+        "vendor invoice", "purchase order", "freight", "logistics", "gst return",
+        "auditor compliance", "utility bill", "electricity bill", "commercial lease",
+        "payable to", "bill to:", "inventory restock", "subscription"
     ]
     for keyword in expense_keywords:
         if keyword in cleaned_text:

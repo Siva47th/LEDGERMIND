@@ -6,8 +6,8 @@ import pdfplumber
 import pypdfium2 as pdfium
 from PIL import Image
 
-# If Tesseract is not in your system environment PATH, uncomment and set this line:
-# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+if os.path.exists(r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 def preprocess_image_for_ocr(image):
     """

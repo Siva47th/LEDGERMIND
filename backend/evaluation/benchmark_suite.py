@@ -12,17 +12,85 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from forecasting.engine import get_forecasts
 from case_memory.vector_store import query_similar_cases
 from nlp.extractor import extract_fields
+from ocr.pipeline import extract_text_from_file
+
+# Paths
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REAL_INVOICES_DIR = os.path.join(BASE_DIR, "data", "real_invoices")
+GROUND_TRUTH_PATH = os.path.join(REAL_INVOICES_DIR, "ground_truth.json")
 
 def evaluate_nlp_extraction():
     """
-    Evaluates OCR & NLP extraction accuracy against synthetic & sample ground truth invoices.
+    Evaluates OCR & NLP extraction accuracy against both:
+    1. Real invoice images from data/real_invoices/ (with ground_truth.json)
+    2. Hardcoded synthetic sample texts (fallback)
+
     Returns Precision, Recall, and F1-Score for field extractions.
     """
+    # --- Part A: Evaluate on real invoice images (if available) ---
+    real_results = {"vendor_correct": 0, "amount_correct": 0, "total": 0}
+
+    if os.path.exists(GROUND_TRUTH_PATH):
+        import shutil
+        tesseract_available = shutil.which("tesseract") is not None or os.path.exists(r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+
+        if not tesseract_available:
+            print("[Benchmark] Tesseract OCR engine binary not detected on PATH. Real image OCR evaluation skipped (install Tesseract-OCR to enable image benchmark).")
+        else:
+            try:
+                with open(GROUND_TRUTH_PATH, "r", encoding="utf-8") as f:
+                    ground_truth = json.load(f)
+
+                print(f"[Benchmark] Evaluating OCR on {len(ground_truth[:5])} real invoice images...")
+
+                for gt in ground_truth[:5]:
+                    image_path = os.path.join(REAL_INVOICES_DIR, gt["image"])
+                    if not os.path.exists(image_path):
+                        print(f"  [SKIP] Image not found: {gt['image']}")
+                        continue
+
+                    try:
+                        raw_text = extract_text_from_file(image_path)
+                        fields = extract_fields(raw_text)
+
+                        real_results["total"] += 1
+
+                        extracted_vendor = fields.get("vendor", "").lower()
+                        truth_vendor = gt["vendor"].lower()
+                        if (truth_vendor in extracted_vendor or
+                            extracted_vendor in truth_vendor or
+                            any(w in extracted_vendor for w in truth_vendor.split() if len(w) > 3)):
+                            real_results["vendor_correct"] += 1
+
+                        extracted_amount = fields.get("amount", 0.0)
+                        truth_amount = gt["amount"]
+                        if truth_amount > 0 and abs(extracted_amount - truth_amount) / truth_amount < 0.05:
+                            real_results["amount_correct"] += 1
+                        elif truth_amount == 0 and extracted_amount == 0:
+                            real_results["amount_correct"] += 1
+
+                    except Exception as e:
+                        if "tesseract is not installed" in str(e).lower() or "tesseractnotfounderror" in str(e).lower():
+                            print("  [NOTE] Tesseract binary not on PATH. Real image OCR requires Tesseract OCR engine installation.")
+                            break
+                        print(f"  [ERROR] Failed on {gt['image']}: {e}")
+                        real_results["total"] += 1
+            except Exception as e:
+                print(f"[Benchmark] Error loading ground truth: {e}")
+    else:
+        print(f"[Benchmark] No ground_truth.json found at {GROUND_TRUTH_PATH}. Skipping real invoice evaluation.")
+
+    # --- Part B: Hardcoded synthetic sample evaluation (always runs) ---
     sample_texts = [
-        ("FEE RECEIPT IFET College of Engineering Date: 05/08/2024 Total Paid: Rs. 47,000 Tuition Fee", {"vendor": "IFET College of Engineering", "amount": 47000.0, "type": "expense"}),
+        ("TAX INVOICE Metro Cash & Carry Date: 05/08/2024 Total Paid: Rs. 47,000 Bulk Inventory Restock", {"vendor": "Metro Cash & Carry", "amount": 47000.0, "type": "expense"}),
         ("AWS Cloud Invoice #9012 Date: 2026-08-10 Amount: Rs. 1,500 Monthly Hosting", {"vendor": "AWS Cloud", "amount": 1500.0, "type": "expense"}),
         ("TAX INVOICE SRI LAKSHMI SUPERMARKET Total Amount: Rs. 52,552.50 Payment Received", {"vendor": "SRI LAKSHMI SUPERMARKET", "amount": 52552.50, "type": "income"}),
         ("CREDIT NOTE Dell India Vendor Refund Amount Credited: Rs. 8,500.00", {"vendor": "Dell India", "amount": 8500.0, "type": "return_in"}),
+        # Sivam Traders persona invoices
+        ("ABC Traders INVOICE Bill To: Sivam Traders General merchandise inventory restock Total: Rs.45,000.00", {"vendor": "ABC Traders", "amount": 45000.0, "type": "expense"}),
+        ("CloudHost Technologies Pvt Ltd INVOICE Bill To: Sivam Traders Business hosting plan Total: Rs.4,200.00", {"vendor": "CloudHost Technologies", "amount": 4200.0, "type": "expense"}),
+        ("Kothari & Associates INVOICE GST return filing Auditor compliance review Total: Rs.15,000.01", {"vendor": "Kothari & Associates", "amount": 15000.01, "type": "expense"}),
+        ("Sharma Logistics & Freight INVOICE Freight delivery charges stock consignment Total: Rs.7,800.00", {"vendor": "Sharma Logistics", "amount": 7800.0, "type": "expense"}),
     ]
 
     correct_vendor = 0
@@ -32,7 +100,7 @@ def evaluate_nlp_extraction():
 
     for text, truth in sample_texts:
         fields = extract_fields(text)
-        extracted_vendor = fields.get("vendor_or_client", "").lower()
+        extracted_vendor = fields.get("vendor", "").lower()
         truth_vendor = truth["vendor"].lower()
 
         # Check vendor overlap or match
@@ -43,15 +111,30 @@ def evaluate_nlp_extraction():
         if fields.get("transaction_type") == truth["type"]:
             correct_type += 1
 
-    vendor_precision = correct_vendor / total
-    amount_precision = correct_amount / total
-    type_precision = correct_type / total
+    # --- Combine Results ---
+    synth_vendor_p = correct_vendor / total
+    synth_amount_p = correct_amount / total
+    synth_type_p = correct_type / total
+
+    if real_results["total"] > 0:
+        real_vendor_p = real_results["vendor_correct"] / real_results["total"]
+        real_amount_p = real_results["amount_correct"] / real_results["total"]
+        # Weighted average: real images weighted more (60%) vs synthetic (40%)
+        vendor_precision = 0.6 * real_vendor_p + 0.4 * synth_vendor_p
+        amount_precision = 0.6 * real_amount_p + 0.4 * synth_amount_p
+        type_precision = synth_type_p  # Only synthetic has type labels
+    else:
+        vendor_precision = synth_vendor_p
+        amount_precision = synth_amount_p
+        type_precision = synth_type_p
+
     overall_precision = (vendor_precision + amount_precision + type_precision) / 3.0
-    overall_recall = overall_precision # Balanced holdout set
+    overall_recall = overall_precision  # Balanced holdout set
     f1_score = 2 * (overall_precision * overall_recall) / (overall_precision + overall_recall) if (overall_precision + overall_recall) > 0 else 0.0
 
     return {
-        "samples_evaluated": total,
+        "samples_evaluated_synthetic": total,
+        "samples_evaluated_real": real_results["total"],
         "vendor_precision_pct": round(vendor_precision * 100, 1),
         "amount_precision_pct": round(amount_precision * 100, 1),
         "type_precision_pct": round(type_precision * 100, 1),
@@ -85,7 +168,10 @@ def evaluate_vector_search():
         ("development laptops for team", ["Shopping", "Equipment"]),
         ("cloud hosting server subscription", ["Software", "Utilities"]),
         ("google ads marketing campaign", ["Marketing"]),
-        ("consulting client invoice payment", ["Financial"])
+        ("consulting client invoice payment", ["Financial"]),
+        # Sivam Traders specific queries
+        ("inventory restocking bulk purchase", ["Shopping"]),
+        ("monthly staff salary payroll", ["Financial"]),
     ]
 
     precision_at_3 = []
