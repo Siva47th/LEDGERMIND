@@ -2215,20 +2215,43 @@ function App() {
 
                     {/* Audit Ledger Table */}
                     <div className="glass-card" style={{ padding: '1.75rem', marginTop: '0.5rem' }}>
-                      <div className="grid-section-header" style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <h3 style={{ margin: 0, textAlign: 'left' }}>Daily Transaction Evidence Journal</h3>
-                          <p style={{ color: '#64748b', fontSize: '0.8rem', margin: '0.25rem 0 0 0', textAlign: 'left' }}>
+                      <div className="grid-section-header" style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div style={{ textAlign: 'left' }}>
+                          <h3 style={{ margin: 0 }}>Daily Transaction Evidence Journal</h3>
+                          <p style={{ color: '#64748b', fontSize: '0.8rem', margin: '0.25rem 0 0 0' }}>
                             Audit trail showing simulated retail revenues alongside your actual uploaded invoice expenses.
                           </p>
+                          
+                          {/* Color-Coding Explanation Legend */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.65rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Text Color Guide:</span>
+                            <span style={{ fontSize: '0.74rem', fontWeight: 700, padding: '0.2rem 0.65rem', borderRadius: '12px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', display: 'flex', alignItems: 'center', gap: '0.35rem' }} title="Days with OCR-parsed vendor invoices uploaded by you">
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#4338ca' }}></span>
+                              Indigo = Actual Uploaded Invoice
+                            </span>
+                            <span style={{ fontSize: '0.74rem', fontWeight: 700, padding: '0.2rem 0.65rem', borderRadius: '12px', background: '#f5f3ff', color: '#7e22ce', border: '1px solid #e9d5ff', display: 'flex', alignItems: 'center', gap: '0.35rem' }} title="Days with automated payroll or recurring expenses">
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#7e22ce' }}></span>
+                              Purple = Fixed Recurring Outflow
+                            </span>
+                            <span style={{ fontSize: '0.74rem', fontWeight: 700, padding: '0.2rem 0.65rem', borderRadius: '12px', background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '0.35rem' }} title="Daily walk-in store revenue and sales settlements">
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#0f172a' }}></span>
+                              Dark Slate = Daily Store Sales
+                            </span>
+                          </div>
                         </div>
-                        <button
-                          className="btn-primary"
-                          onClick={downloadAuditCSV}
-                          style={{ padding: '0.45rem 1.15rem', fontSize: '0.78rem', background: '#ffffff', color: '#0f172a', border: '1px solid #e2e8f0', fontWeight: 700 }}
-                        >
-                          Export Audit Trail (.CSV)
-                        </button>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                          <button
+                            className="btn-primary"
+                            onClick={downloadAuditCSV}
+                            style={{ padding: '0.45rem 1.15rem', fontSize: '0.78rem', background: '#ffffff', color: '#0f172a', border: '1px solid #e2e8f0', fontWeight: 700 }}
+                          >
+                            Export Audit Trail (.CSV)
+                          </button>
+                          <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>
+                            💡 Mouse hover highlights row
+                          </span>
+                        </div>
                       </div>
 
                       <div className="ledger-table-container">
