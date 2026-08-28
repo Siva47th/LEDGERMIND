@@ -2235,11 +2235,11 @@ function App() {
                         <table className="ledger-table">
                           <thead>
                             <tr>
-                              <th style={{ textAlign: 'left' }}>Date</th>
+                              <th style={{ textAlign: 'left', whiteSpace: 'nowrap', width: '120px' }}>Date</th>
                               <th style={{ textAlign: 'left' }}>Daily Events / Vendors</th>
-                              <th style={{ textAlign: 'right' }}>Cash Inflow</th>
-                              <th style={{ textAlign: 'right' }}>Cash Outflow</th>
-                              <th style={{ textAlign: 'right' }}>Closing Balance</th>
+                              <th style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>Cash Inflow</th>
+                              <th style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>Cash Outflow</th>
+                              <th style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>Closing Balance</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -2250,7 +2250,7 @@ function App() {
                                 const outflow = h.expense + h.recurring + h.actual_invoice;
                                 return (
                                   <tr key={index}>
-                                    <td style={{ fontWeight: 700, textAlign: 'left', color: '#0f172a' }}>{h.date}</td>
+                                    <td style={{ fontWeight: 700, textAlign: 'left', color: '#0f172a', whiteSpace: 'nowrap', width: '120px' }}>{h.date}</td>
                                     <td style={{ textAlign: 'left' }}>
                                       <span style={{ 
                                         color: h.actual_invoice > 0 ? '#4338ca' : h.recurring > 0 ? '#7e22ce' : '#0f172a',
@@ -2259,13 +2259,13 @@ function App() {
                                         {h.description}
                                       </span>
                                     </td>
-                                    <td style={{ color: '#166534', fontWeight: 700, textAlign: 'right' }}>
+                                    <td style={{ color: '#166534', fontWeight: 700, textAlign: 'right', whiteSpace: 'nowrap' }}>
                                       +Rs.{h.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
-                                    <td style={{ color: outflow > 0 ? '#b91c1c' : '#475569', fontWeight: outflow > 0 ? 700 : 500, textAlign: 'right' }}>
+                                    <td style={{ color: outflow > 0 ? '#b91c1c' : '#475569', fontWeight: outflow > 0 ? 700 : 500, textAlign: 'right', whiteSpace: 'nowrap' }}>
                                       {outflow > 0 ? `-Rs.${outflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'Rs.0.00'}
                                     </td>
-                                    <td style={{ fontWeight: 800, textAlign: 'right', color: '#0f172a' }}>
+                                    <td style={{ fontWeight: 800, textAlign: 'right', color: '#0f172a', whiteSpace: 'nowrap' }}>
                                       Rs.{h.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                   </tr>

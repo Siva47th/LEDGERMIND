@@ -949,41 +949,55 @@
 .ledger-table-container {
   max-height: 520px;
   overflow-y: auto;
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
 }
 
 .ledger-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   text-align: left;
 }
 
 .ledger-table th {
-  padding: 0.9rem 1.1rem;
+  padding: 0.95rem 1.15rem;
   font-size: 0.75rem;
   text-transform: uppercase;
   color: #475569;
   font-weight: 800;
   letter-spacing: 0.06em;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid #cbd5e1;
   background: #f8fafc;
   position: sticky;
   top: 0;
   z-index: 1;
+  white-space: nowrap;
 }
 
 .ledger-table td {
-  padding: 0.8rem 1.1rem;
-  font-size: 0.85rem;
+  padding: 0.95rem 1.15rem;
+  font-size: 0.88rem;
   color: #1e293b;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ledger-table td:first-child, .custom-table td:first-child {
+  white-space: nowrap !important;
+  font-weight: 700;
 }
 
 .ledger-table tbody tr {
-  transition: background 0.18s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #ffffff;
+}
+
+.ledger-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .ledger-table tbody tr:hover {
-  background: #eef2ff;
+  background: #f8fafc;
+  box-shadow: inset 3px 0 0 #6366f1;
 }
