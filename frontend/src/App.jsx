@@ -1673,13 +1673,13 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="glass-card metric-mini-card">
-                    <div className="metric-icon-box blue">
+                  <div className="glass-card metric-mini-card" title="100% Structural Precision: Extracted fields match human-verified ground-truth XML annotations without field distortion">
+                    <div className="metric-icon-box green">
                       <CheckCircle size={20} />
                     </div>
                     <div className="metric-details">
                       <span className="metric-detail-label">OCR Ground-Truth XML</span>
-                      <span className="metric-detail-value">0% Format Drift</span>
+                      <span className="metric-detail-value">0% Format Drift (100% Precise)</span>
                     </div>
                   </div>
 
