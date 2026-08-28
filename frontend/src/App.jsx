@@ -1485,27 +1485,27 @@ function App() {
                 </div>
 
                 {/* Ledger Data Table */}
-                <div className="table-wrapper">
+                <div className="ledger-table-container">
                   {transactions.length > 0 ? (
-                    <table className="custom-table">
+                    <table className="ledger-table">
                       <thead>
                         <tr>
-                          <th>Date</th>
-                          <th>Type</th>
-                          <th>Vendor / Client</th>
-                          <th>Category</th>
-                          <th style={{ textAlign: 'left' }}>Notes</th>
-                          <th style={{ textAlign: 'right' }}>Amount</th>
+                          <th style={{ textAlign: 'center', whiteSpace: 'nowrap', minWidth: '120px' }}>Date</th>
+                          <th style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>Type</th>
+                          <th style={{ textAlign: 'left', minWidth: '160px' }}>Vendor / Client</th>
+                          <th style={{ textAlign: 'center' }}>Category</th>
+                          <th style={{ textAlign: 'left', minWidth: '180px' }}>Notes</th>
+                          <th style={{ textAlign: 'right', whiteSpace: 'nowrap', minWidth: '130px' }}>Amount</th>
                           <th style={{ textAlign: 'center' }}>Health</th>
-                          <th style={{ textAlign: 'center' }}>Outcome Label</th>
+                          <th style={{ textAlign: 'center', minWidth: '140px' }}>Outcome Label</th>
                           <th style={{ textAlign: 'center' }}>Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {transactions.map((txn) => (
                           <tr key={txn.id}>
-                            <td style={{ fontWeight: 700, color: '#0f172a' }}>{txn.date}</td>
-                            <td>
+                            <td style={{ fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', textAlign: 'center', minWidth: '120px' }}>{txn.date}</td>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                               <select
                                 value={txn.transaction_type}
                                 onChange={(e) => updateTransactionType(txn.id, e.target.value)}
@@ -1527,16 +1527,16 @@ function App() {
                                 <option value="return_out" style={{ background: '#ffffff', color: '#b91c1c' }}>↓ Refund Out</option>
                               </select>
                             </td>
-                            <td style={{ fontWeight: 800, color: '#0f172a' }}>{txn.vendor_or_client}</td>
-                            <td>
+                            <td style={{ fontWeight: 800, color: '#4338ca', textAlign: 'justify', textAlignLast: 'left', textJustify: 'inter-word' }}>{txn.vendor_or_client}</td>
+                            <td style={{ textAlign: 'center' }}>
                               <span className={`badge ${txn.category === 'Shopping' ? 'category-shopping' : 'category'}`}>
                                 {txn.category}
                               </span>
                             </td>
-                            <td style={{ color: '#334155', fontWeight: 600, fontStyle: 'italic', fontSize: '0.85rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }} title={txn.user_notes}>
+                            <td style={{ color: '#334155', fontWeight: 600, fontSize: '0.85rem', textAlign: 'justify', textAlignLast: 'left', textJustify: 'inter-word' }} title={txn.user_notes}>
                               {txn.user_notes || '—'}
                             </td>
-                            <td style={{ textAlign: 'right', fontWeight: 800, color: txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '#166534' : '#b91c1c' }}>
+                            <td style={{ textAlign: 'right', fontWeight: 800, whiteSpace: 'nowrap', minWidth: '130px', color: txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '#166534' : '#b91c1c' }}>
                               {txn.transaction_type === 'income' || txn.transaction_type === 'return_in' ? '+' : '-'}Rs.{txn.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td style={{ textAlign: 'center' }}>
