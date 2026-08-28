@@ -208,22 +208,22 @@
 .search-input-wrapper input {
   width: 100%;
   background: #ffffff;
-  border: 1px solid #cbd5e1;
+  border: 1.5px solid #cbd5e1;
   border-radius: 12px;
-  padding: 0.6rem 1rem 0.6rem 2.4rem;
+  padding: 0.65rem 1rem 0.65rem 2.4rem;
   color: #0f172a;
   font-size: 0.88rem;
-  font-weight: 500;
+  font-weight: 600;
   box-sizing: border-box;
   transition: all 0.25s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .search-input-wrapper input:focus {
   outline: none;
   background: #ffffff;
   border-color: #6366f1;
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14), 0 2px 8px rgba(99, 102, 241, 0.06);
 }
 
 .search-input-icon {
@@ -231,7 +231,7 @@
   left: 0.85rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #94a3b8;
+  color: #6366f1;
 }
 
 /* Buttons */
@@ -239,28 +239,108 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.6rem 1.15rem;
+  padding: 0.65rem 1.25rem;
   border-radius: 12px;
   font-size: 0.88rem;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
   border: 1px solid #cbd5e1;
   background: #ffffff;
   color: #1e293b;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 
 .btn-primary:hover {
   background: #f8fafc;
-  border-color: #94a3b8;
+  border-color: #6366f1;
+  color: #4338ca;
   transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
 }
 
 .btn-primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Premium Form Entry Boxes & Select Inputs */
+.custom-input-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.custom-input-icon {
+  position: absolute;
+  left: 0.95rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6366f1;
+  pointer-events: none;
+  font-weight: 800;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.custom-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.8rem 1rem 0.8rem 2.6rem;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  color: #0f172a;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-input.no-icon {
+  padding-left: 1rem;
+}
+
+.custom-input:focus {
+  outline: none;
+  background: #ffffff;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14), 0 2px 8px rgba(99, 102, 241, 0.06);
+}
+
+.custom-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.8rem 2.6rem 0.8rem 2.6rem;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  color: #0f172a;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.9rem center;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.custom-select:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14), 0 2px 8px rgba(99, 102, 241, 0.06);
+}
+
+.custom-select.no-icon {
+  padding-left: 1rem;
 }
 
 /* Glass Cards & Containers */
@@ -734,19 +814,21 @@
 
 .field-group input, .field-group select {
   background: #ffffff;
-  border: 1px solid #cbd5e1;
+  border: 1.5px solid #cbd5e1;
   border-radius: 12px;
   padding: 0.65rem 0.95rem;
   color: #0f172a;
   font-size: 0.88rem;
-  font-weight: 500;
+  font-weight: 600;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .field-group input:focus, .field-group select:focus {
   outline: none;
   border-color: #6366f1;
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14), 0 2px 8px rgba(99, 102, 241, 0.06);
 }
 
 /* Category Legend styling */
@@ -806,7 +888,7 @@
 /* Filter Pills & Buttons */
 .filter-pill {
   background: #ffffff;
-  border: 1px solid #cbd5e1;
+  border: 1.5px solid #cbd5e1;
   color: #475569;
   padding: 0.45rem 1rem;
   border-radius: 9999px;

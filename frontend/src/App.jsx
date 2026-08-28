@@ -2862,67 +2862,89 @@ function App() {
                     Manage baseline liquidity settings, safety threshold alerts, and LLM reasoning models.
                   </p>
 
-                  <form onSubmit={handleSettingsSave} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.4rem' }}>
+                  <form onSubmit={handleSettingsSave} style={{ display: 'flex', flexDirection: 'column', gap: '1.4rem' }}>
+                    <div className="field-group">
+                      <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#475569', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                         Starting Business Cash Balance (Rs.)
                       </label>
-                      <input 
-                        type="number"
-                        step="0.01"
-                        className="search-input"
-                        value={settingsForm.starting_balance}
-                        onChange={(e) => setSettingsForm(prev => ({ ...prev, starting_balance: parseFloat(e.target.value) || 0 }))}
-                        style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a' }}
-                      />
-                      <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600, marginTop: '0.2rem', display: 'block' }}>
+                      <div className="custom-input-wrapper">
+                        <span className="custom-input-icon">₹</span>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          className="custom-input"
+                          value={settingsForm.starting_balance}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, starting_balance: parseFloat(e.target.value) || 0 }))}
+                        />
+                      </div>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginTop: '0.35rem', display: 'block' }}>
                         Live balance is calculated as: Starting Balance + Σ(Income) - Σ(Expenses).
                       </span>
                     </div>
 
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.4rem' }}>
+                    <div className="field-group">
+                      <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#475569', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                         Financial Safety Alert Threshold (Rs.)
                       </label>
-                      <input 
-                        type="number"
-                        step="0.01"
-                        className="search-input"
-                        value={settingsForm.balance_alert_threshold}
-                        onChange={(e) => setSettingsForm(prev => ({ ...prev, balance_alert_threshold: parseFloat(e.target.value) || 0 }))}
-                        style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a' }}
-                      />
-                      <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600, marginTop: '0.2rem', display: 'block' }}>
+                      <div className="custom-input-wrapper">
+                        <span className="custom-input-icon">₹</span>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          className="custom-input"
+                          value={settingsForm.balance_alert_threshold}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, balance_alert_threshold: parseFloat(e.target.value) || 0 }))}
+                        />
+                      </div>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginTop: '0.35rem', display: 'block' }}>
                         Triggers "Strained" risk warnings when cash reserve drops below this amount.
                       </span>
                     </div>
 
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.4rem' }}>
+                    <div className="field-group">
+                      <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#475569', marginBottom: '0.45rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                         Preferred Gemini AI Reasoning Model
                       </label>
-                      <select
-                        className="search-input"
-                        value={settingsForm.gemini_model}
-                        onChange={(e) => setSettingsForm(prev => ({ ...prev, gemini_model: e.target.value }))}
-                        style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #c7d2fe', color: '#0f172a' }}
-                      >
-                        <option value="gemini-3.5-flash" style={{ background: '#ffffff', color: '#0f172a' }}>Gemini 3.5 Flash (Recommended - Latest & Fast)</option>
-                        <option value="gemini-2.5-pro" style={{ background: '#ffffff', color: '#0f172a' }}>Gemini 2.5 Pro (Deep Complex Reasoning)</option>
-                        <option value="gemini-2.5-flash" style={{ background: '#ffffff', color: '#0f172a' }}>Gemini 2.5 Flash (Standard Baseline)</option>
-                      </select>
-                      <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600, marginTop: '0.2rem', display: 'block' }}>
+                      <div className="custom-input-wrapper">
+                        <span className="custom-input-icon"><Bot size={18} color="#6366f1" /></span>
+                        <select
+                          className="custom-select"
+                          value={settingsForm.gemini_model}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, gemini_model: e.target.value }))}
+                        >
+                          <option value="gemini-3.5-flash">Gemini 3.5 Flash (Recommended - Latest & Fast)</option>
+                          <option value="gemini-2.5-pro">Gemini 2.5 Pro (Deep Complex Reasoning)</option>
+                          <option value="gemini-2.5-flash">Gemini 2.5 Flash (Standard Baseline)</option>
+                        </select>
+                      </div>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginTop: '0.35rem', display: 'block' }}>
                         Used by RAG Fusion engine for generating explainable advice.
                       </span>
                     </div>
 
                     <button 
                       type="submit"
-                      className="filter-pill active"
                       disabled={settingsSaving}
-                      style={{ padding: '0.85rem 1.5rem', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', marginTop: '0.5rem', background: 'linear-gradient(135deg, #6366f1, #3b82f6)', color: '#ffffff' }}
+                      style={{
+                        padding: '0.85rem 1.75rem',
+                        borderRadius: '12px',
+                        fontWeight: 800,
+                        fontSize: '0.9rem',
+                        cursor: settingsSaving ? 'not-allowed' : 'pointer',
+                        marginTop: '0.75rem',
+                        background: 'linear-gradient(135deg, #6366f1, #3b82f6)',
+                        color: '#ffffff',
+                        border: 'none',
+                        boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        transition: 'all 0.25s ease'
+                      }}
                     >
-                      {settingsSaving ? 'Saving Settings...' : 'Save System Settings'}
+                      <Sparkles size={18} />
+                      <span>{settingsSaving ? 'Saving Settings...' : 'Save System Settings'}</span>
                     </button>
                   </form>
                 </div>
