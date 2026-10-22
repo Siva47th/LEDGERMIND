@@ -264,14 +264,15 @@ def translate_notes_to_tamil(notes):
     return notes
 
 
-def generate_advisor_recommendation(user_query, top_k=4, language="en"):
+def generate_advisor_recommendation(user_query, top_k=4, language="en", chat_history=None):
     """
     RAG Fusion Engine Main Entry Point:
     1. Retrieves top K similar past case memories from ChromaDB using LLM Semantic Query Rewriting
-    2. Fetches live cash balance & 30-day forecast trajectory
-    3. Calculates Adaptive Blending confidence weight
-    4. Constructs structured prompt for Gemini API (supporting English & Tamil)
-    5. Calls Gemini model to generate explainable financial advice
+    2. Incorporates multi-turn conversation history for context-aware follow-up reasoning
+    3. Fetches live cash balance & 30-day forecast trajectory
+    4. Calculates Adaptive Blending confidence weight
+    5. Constructs structured prompt for Gemini API with strict mathematical refusal/caution guardrails
+    6. Calls Gemini model to generate explainable financial advice
     """
     api_key = os.getenv("GEMINI_API_KEY")
 
@@ -285,11 +286,18 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     is_income_query = any(s in user_query.lower() for s in income_signals)
     target_txn_type = "income" if is_income_query else "expense"
 
+    # If the user query is a relative follow-up (e.g. "what about Rs. 30,000 instead?"),
+    # combine it with the previous turn's query subject so ChromaDB retrieves relevant cases.
+    resolved_search_text = user_query
+    if chat_history and len(chat_history) > 0:
+        last_turn_q = chat_history[-1].get("query", "")
+        follow_up_tokens = ["what about", "instead", "how about", "what if", "can we do", "why not", "மாற்றாக"]
+        if any(tok in user_query.lower() for tok in follow_up_tokens):
+            resolved_search_text = f"{user_query} (context: {last_turn_q})"
+
     # 1. Retrieve Similar Cases from ChromaDB Vector Store with LLM Semantic Query Rewriting
-    # Strictly filtered by transaction_type so expense proposals only compare against past expenses,
-    # and income proposals only compare against past revenue receipts.
     try:
-        search_query = normalize_search_query(user_query, api_key=api_key)
+        search_query = normalize_search_query(resolved_search_text, api_key=api_key)
         retrieved_cases = query_similar_cases(
             query_text=search_query, 
             top_k=top_k, 
@@ -317,13 +325,11 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
         print(f"[RAG Engine] Forecast fetch warning: {e}")
 
     # 3. Calculate Adaptive Blending Weight
-    # Weight combines retrieval count factor with average similarity quality factor
-    # so the weight genuinely varies per query instead of always being 80%
     num_cases = len(retrieved_cases)
     if num_cases > 0:
         avg_similarity = sum(c.get('similarity_score', 50) for c in retrieved_cases) / num_cases
-        count_factor = min(num_cases / 5.0, 1.0)          # 0.0–1.0 based on how many cases found
-        quality_factor = max(0.0, min(avg_similarity / 100.0, 1.0))  # 0.0–1.0 based on match quality
+        count_factor = min(num_cases / 5.0, 1.0)
+        quality_factor = max(0.0, min(avg_similarity / 100.0, 1.0))
         blend_weight = round(count_factor * quality_factor, 2)
     else:
         blend_weight = 0.0
@@ -343,6 +349,26 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
             f"HISTORICAL OUTCOME STATE={outcome.upper()}, Notes/Lesson={notes}, Similarity Score={sim_score:.1f}%."
         )
     formatted_cases = "\n".join(cases_text_list) if cases_text_list else "No similar past cases found."
+
+    # Format prior multi-turn conversational context if available
+    history_context_str = ""
+    if chat_history and len(chat_history) > 0:
+        hist_items = []
+        for turn in chat_history[-3:]:
+            t_q = turn.get("query", "")
+            t_v = turn.get("verdict", "")
+            t_resp = turn.get("response") or {}
+            t_exp = t_resp.get("explanation", "")[:150]
+            if t_q:
+                hist_items.append(f"- User Proposal: \"{t_q}\"\n  Advisor Verdict: {t_v}\n  Advisor Summary: {t_exp}")
+        if hist_items:
+            history_context_str = (
+                "PRIOR CONVERSATION HISTORY (Previous Consultation Turns in this Session):\n"
+                + "\n".join(hist_items) + "\n\n"
+                + "CONVERSATIONAL FOLLOW-UP INSTRUCTION: If the user query is a relative follow-up "
+                + "(e.g. 'what about ₹30,000 instead?', 'can we do 2 instead?', 'how about next month?'), "
+                + "you MUST use the prior conversation turns above to resolve the product, service, or vendor being discussed!\n"
+            )
 
     # Auto-detect Tamil script or explicit language parameter
     is_tamil_query = any('\u0b80' <= char <= '\u0bff' for char in user_query)
@@ -383,6 +409,7 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     direction_desc = "INCOME (Receiving Money / Client Settlement)" if is_income_query else "EXPENSE (Spending Money / Vendor Purchase)"
 
     prompt = f"""
+{history_context_str}
 USER PROPOSAL / QUERY:
 "{user_query}"
 
@@ -401,6 +428,11 @@ PAST CASE MEMORY (Retrieved via Cosine Similarity from ChromaDB - Filtered to {t
 {formatted_cases}
 
 ADAPTIVE BLENDING WEIGHT: {blend_wt_str} (1.00 means high historical grounding; 0.00 means generic rules).
+
+MANDATORY VERDICT DETERMINATION RULES (DO NOT DEFAULT TO RECOMMENDED):
+1. REFUSAL RULE (NOT RECOMMENDED): If Estimated Post-Transaction Reserve < Rs. {alert_thresh_str} OR if the proposal outlay exceeds cash balance (creating negative cash reserve), you MUST assign "verdict": "Not Recommended" and "risk_level": "High". The explanation MUST clearly state the cash deficit, warn that the safety liquidity buffer is breached, cite similar strained past cases, and explicitly refuse the outlay with actionable deferral advice.
+2. CAUTION RULE (PROCEED WITH CAUTION): If Estimated Post-Transaction Reserve is between Rs. {alert_thresh_str} and Rs. 50,000 OR if retrieved past case memories were predominantly STRAINED/WASTEFUL, you MUST assign "verdict": "Proceed with Caution" and "risk_level": "Medium". The explanation MUST warn that the reserve is uncomfortably close to the threshold and suggest staggering or securing receivables.
+3. APPROVAL RULE (RECOMMENDED): Only assign "verdict": "Recommended" and "risk_level": "Low" if Estimated Post-Transaction Reserve >= Rs. 50,000 AND past precedent indicates healthy/profitable outcomes.
 
 CRITICAL GROUNDING INSTRUCTIONS:
 Retrieved Past Case Memories from ChromaDB vector memory are provided above (filtered to match proposal transaction type). YOU MUST ALWAYS EXPLICITLY CITE AND COMPARE THE USER PROPOSAL AGAINST THESE RETRIEVED PAST CASES in both your 'explanation' and 'key_factors':
@@ -429,13 +461,13 @@ Analyze the user proposal and respond in STRICT JSON format with EXACTLY these k
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         print("[RAG Engine] Warning: GEMINI_API_KEY missing in environment.")
-        return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language=language)
+        return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language=language, chat_history=chat_history)
 
     response_text = call_gemini_rest_api(api_key, system_instruction, prompt)
 
     if not response_text:
         print("[RAG Engine] All Gemini model invocations failed. Falling back to heuristic rule engine.")
-        return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language=language)
+        return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language=language, chat_history=chat_history)
 
     # Parse JSON output from Gemini
     try:
@@ -447,29 +479,55 @@ Analyze the user proposal and respond in STRICT JSON format with EXACTLY these k
         clean_text = clean_text.strip()
 
         parsed = json.loads(clean_text)
+
+        # Enforce mathematical guardrails
+        if expected_post_bal < BALANCE_ALERT_THRESHOLD and not is_income_query:
+            parsed["verdict"] = "Not Recommended"
+            parsed["risk_level"] = "High"
+        elif expected_post_bal < 50000.0 and parsed.get("verdict") == "Recommended" and not is_income_query:
+            parsed["verdict"] = "Proceed with Caution"
+            parsed["risk_level"] = "Medium"
+
+        parsed["estimated_post_balance"] = round(expected_post_bal, 2)
         parsed["blend_weight"] = round(blend_weight, 2)
         parsed["retrieved_cases"] = retrieved_cases
         parsed["current_balance"] = current_balance
         return parsed
     except Exception as parse_err:
         print(f"[RAG Engine] JSON parse error on LLM response: {parse_err}. Raw response: {response_text}")
+        return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language=language, chat_history=chat_history)
         return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language=language)
 
 
 def extract_amount_from_query(user_query, api_key=None):
     """
     Extracts numerical transaction amount from natural language queries in English, Tamil, or Tanglish:
-    '50000rs', 'Rs. 75,000', '₹50,000', '50k', '45000 rupees', 'இருபதாயிரத்தில்', '20k'
+    '50000rs', 'Rs. 75,000', '₹50,000', '50k', '45000 rupees', '₹20 lakh', '20 lakhs', '20 crores', '20 லட்சம்'
     """
     import re
     query = user_query.lower()
     
-    # 1. Match '50k' or '50 k'
-    k_match = re.search(r'(\d+(?:\.\d+)?)\s*k\b', query)
+    # 1. Match Crores (e.g. '20 crore', '1.5 crores', '2cr')
+    cr_match = re.search(r'(?:₹|rs\.?|inr\s*)?(\d+(?:\.\d+)?)\s*(?:crores?|cr)\b', query)
+    if cr_match:
+        return float(cr_match.group(1)) * 10000000.0
+
+    # 2. Match Lakhs / Lacs (e.g. '20 lakh', '20 lakhs', '₹20 lakh', '20lakh', '1.5 lac', '5 lacs', '20 l')
+    lakh_match = re.search(r'(?:₹|rs\.?|inr\s*)?(\d+(?:\.\d+)?)\s*(?:lakhs?|lacs?|lac|l)\b', query)
+    if lakh_match:
+        return float(lakh_match.group(1)) * 100000.0
+
+    # 3. Match '50k' or '50 k'
+    k_match = re.search(r'(?:₹|rs\.?|inr\s*)?(\d+(?:\.\d+)?)\s*k\b', query)
     if k_match:
         return float(k_match.group(1)) * 1000.0
 
-    # 2. Extract explicit Arabic numerals (e.g., 50000, 20,000, 75000)
+    # 4. Match Tamil Lakhs with digits (e.g. '20 லட்சம்', '5 லட்சம')
+    tamil_digit_lakh = re.search(r'(\d+(?:\.\d+)?)\s*(?:லட்சம|லட்சம்|லக்ஷம|லக்ஷம்)\b', query)
+    if tamil_digit_lakh:
+        return float(tamil_digit_lakh.group(1)) * 100000.0
+
+    # 5. Extract explicit Arabic numerals with commas/decimals (e.g., 20,00,000, 50000, 20,000, 75000)
     numbers = re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', query)
     clean_amounts = []
     for a in numbers:
@@ -484,12 +542,15 @@ def extract_amount_from_query(user_query, api_key=None):
     if clean_amounts:
         return max(clean_amounts)
 
-    # 3. Tamil & Tanglish number words dictionary
+    # 6. Tamil & Tanglish number words dictionary
     tamil_number_patterns = [
-        # Lakhs
-        (r'ஒரு\s*லட்சம|1\s*லட்சம|லட்சம|லட்சத்தில்|லக்ஷம', 100000.0),
-        (r'இரண்டு\s*லட்சம|ரெண்டு\s*லட்சம|2\s*லட்சம', 200000.0),
-        (r'அரை\s*லட்சம', 50000.0),
+        # Lakhs in Tamil words
+        (r'இருபது\s*(?:லட்சம|லட்சம்)', 2000000.0),
+        (r'பத்து\s*(?:லட்சம|லட்சம்)', 1000000.0),
+        (r'ஐந்து\s*(?:லட்சம|லட்சம்)', 500000.0),
+        (r'இரண்டு\s*(?:லட்சம|லட்சம்)|ரெண்டு\s*(?:லட்சம|லட்சம்)|2\s*(?:லட்சம|லட்சம்)', 200000.0),
+        (r'ஒரு\s*(?:லட்சம|லட்சம்)|1\s*(?:லட்சம|லட்சம்)|லட்சம|லட்சம்|லட்சத்தில்|லக்ஷம|லக்ஷம்', 100000.0),
+        (r'அரை\s*(?:லட்சம|லட்சம்)', 50000.0),
         # Tens of Thousands (Tamil script)
         (r'தொன்னூறாயிர|தொன்னூறு\s*ஆயிர', 90000.0),
         (r'எண்பத்தைந்தாயிர|எண்பத்தைந்து\s*ஆயிர', 85000.0),
@@ -530,7 +591,7 @@ def extract_amount_from_query(user_query, api_key=None):
     ]
 
     for pattern, amt in tamil_number_patterns:
-        if re.search(pattern, query):
+        if amt is not None and re.search(pattern, query):
             return amt
 
     # 4. LLM Fallback Amount Extraction
@@ -553,7 +614,7 @@ def extract_amount_from_query(user_query, api_key=None):
     return 10000.0
 
 
-def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language="en"):
+def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language="en", chat_history=None):
     """Fallback rule engine if LLM call is unavailable or fails."""
     is_tamil = language == "ta" or any('\u0b80' <= char <= '\u0bff' for char in user_query)
     
@@ -648,20 +709,20 @@ def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, b
                 action = "Proceed with payment, but record as an owner's draw and stagger non-essential business purchases."
         else:
             if is_tamil:
-                exp = f"{top_case_text_ta}இந்த ரூ. {est_amount:,.2f} செலவு உங்கள் ரொக்க இருப்பை ரூ. {post_bal:,.2f} ஆக குறைக்கும். இது உங்கள் குறைந்தபட்ச பாதுகாப்பு வரம்பான ரூ. {BALANCE_ALERT_THRESHOLD:,.2f}-க்கு அருகில் உள்ளது."
-                action = "செலவு செய்யும் முன் குறுகிய கால வரவுகளை சரிபார்க்கவும்."
+                exp = f"{top_case_text_ta}கவனிக்கவும்: இந்த ரூ. {est_amount:,.2f} செலவுக்குப் பின் எதிர்பார்க்கப்படும் இருப்பு ரூ. {post_bal:,.2f} ஆகும். இது உங்கள் குறைந்தபட்ச பாதுகாப்பு வரம்பான ரூ. {BALANCE_ALERT_THRESHOLD:,.2f}-க்கு அருகில் உள்ளது."
+                action = "செலவு செய்யும் முன் குறுகிய கால வரவுகளை சரிபார்க்கவும் மற்றும் தவணைகளில் செலுத்த பரிசீலிக்கவும்."
             else:
-                exp = f"{top_case_text_en}this expenditure of ~Rs. {est_amount:,.2f} will lower your cash reserves to Rs. {post_bal:,.2f}, which is close to your safety threshold of Rs. {BALANCE_ALERT_THRESHOLD:,.2f}."
-                action = "Review short-term receivables before executing this transaction."
+                exp = f"{top_case_text_en}proceed with caution: this outlay of ~Rs. {est_amount:,.2f} will lower your cash reserves to Rs. {post_bal:,.2f}, which is uncomfortably close to your safety threshold of Rs. {BALANCE_ALERT_THRESHOLD:,.2f}."
+                action = "Review short-term receivables and stagger payments before executing this transaction."
     else:
         verdict = "Not Recommended"
         risk_level = "High"
         if is_tamil:
-            exp = f"{top_case_text_ta}எச்சரிக்கை: இந்த ரூ. {est_amount:,.2f} செலவு உங்கள் ரொக்க இருப்பை ரூ. {post_bal:,.2f} ஆக குறைக்கும். இது உங்கள் பாதுகாப்பு வரம்பை விட குறைவாகும்."
-            action = "ரொக்க நெருக்கடியை தவிர்க்க இச்செலவை ஒத்திவைக்கவும்."
+            exp = f"{top_case_text_ta}எச்சரிக்கை: இந்த ரூ. {est_amount:,.2f} செலவு உங்கள் ரொக்க இருப்பை ரூ. {post_bal:,.2f} ஆகக் குறைக்கும். இது உங்கள் பாதுகாப்பு வரம்பான ரூ. {BALANCE_ALERT_THRESHOLD:,.2f}-ஐ விடக் குறைவாகும் மற்றும் கடுமையான நிதி பற்றாக்குறையை ஏற்படுத்தும்."
+            action = "ரொக்க நெருக்கடியைத் தவிர்க்கவும் வணிக நிலைத்தன்மையைப் பாதுகாக்கவும் இந்தச் செலவை உடனடியாக ரத்துசெய்யவும் அல்லது ஒத்திவைக்கவும்."
         else:
-            exp = f"{top_case_text_en}warning: this outlay of ~Rs. {est_amount:,.2f} will drop your cash balance to Rs. {post_bal:,.2f}, which breaches your safety threshold of Rs. {BALANCE_ALERT_THRESHOLD:,.2f}."
-            action = "Defer or reduce payment amount to avoid liquidity breach."
+            exp = f"{top_case_text_en}Warning: Spending ~Rs. {est_amount:,.2f} will plunge your cash balance from Rs. {current_balance:,.2f} to Rs. {post_bal:,.2f}, which breaches your mandatory safety threshold of Rs. {BALANCE_ALERT_THRESHOLD:,.2f}. Approving this outlay would trigger an immediate operational liquidity deficit and leave your business unable to meet payroll or mandatory vendor dues."
+            action = "Decline or defer this purchase until cash reserves recover or upcoming client receivables are collected."
 
     if is_tamil:
         key_factors = []

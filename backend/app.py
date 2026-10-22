@@ -1565,11 +1565,59 @@ def advisor_query():
         top_k = int(data.get("top_k", 4))
         language = data.get("language", "en")
 
-        result = generate_advisor_recommendation(user_query=user_query, top_k=top_k, language=language)
-
-        # Persist conversation turn into SQLite advisor_chats table
         user_id = g.current_user["user_id"] if (hasattr(g, 'current_user') and g.current_user) else 1
         username = g.current_user.get("username", "admin") if (hasattr(g, 'current_user') and g.current_user) else "admin"
+
+        # Retrieve prior conversation turns for multi-turn conversational reasoning
+        recent_history = []
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS advisor_chats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 1,
+                    query TEXT NOT NULL,
+                    language TEXT DEFAULT 'en',
+                    verdict TEXT,
+                    risk_level TEXT,
+                    response_json TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                SELECT query, language, verdict, risk_level, response_json
+                FROM advisor_chats
+                WHERE user_id = ?
+                ORDER BY id DESC LIMIT 4
+            """, (user_id,))
+            rows = cursor.fetchall()
+            for r in reversed(rows):
+                try:
+                    r_obj = json.loads(r["response_json"])
+                except Exception:
+                    r_obj = {}
+                recent_history.append({
+                    "query": r["query"],
+                    "verdict": r["verdict"],
+                    "risk_level": r["risk_level"],
+                    "response": r_obj
+                })
+            conn.close()
+        except Exception as h_err:
+            print(f"[Advisor History Context Warning] {h_err}")
+
+        # Also support client-provided history if provided
+        if data.get("history") and isinstance(data.get("history"), list):
+            recent_history = data.get("history")
+
+        result = generate_advisor_recommendation(
+            user_query=user_query, 
+            top_k=top_k, 
+            language=language, 
+            chat_history=recent_history
+        )
+
         verdict = result.get("verdict", "Evaluated")
         risk_level = result.get("risk_level", "Medium")
         response_json_str = json.dumps(result, ensure_ascii=False)
