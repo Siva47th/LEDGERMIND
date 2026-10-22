@@ -1,6 +1,8 @@
 import os
 import sys
 import json
+import re
+import functools
 import sqlite3
 import urllib.request
 import urllib.parse
@@ -18,12 +20,12 @@ from forecasting.engine import get_forecasts
 
 DB_NAME = "finsense.db"
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), DB_NAME)
-STARTING_BALANCE = float(os.environ.get("STARTING_BALANCE", 250000.0))
 BALANCE_ALERT_THRESHOLD = 10000.0
 
 
 def get_current_balance():
     """Calculates current live balance from SQLite transactions."""
+    STARTING_BALANCE = float(os.environ.get("STARTING_BALANCE", 250000.0))
     if not os.path.exists(DB_PATH):
         return STARTING_BALANCE
 
@@ -45,8 +47,8 @@ def get_current_balance():
 
 def call_gemini_rest_api(api_key, system_instruction, prompt_text):
     """
-    Calls Google Gemini REST API directly.
-    Works robustly across Python versions without C-extension protobuf conflicts.
+    Direct HTTPS REST invocation of Gemini generateContent endpoint.
+    Deterministic temperature: 0.0 to guarantee repeatability across repeated queries.
     """
     preferred_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     models_to_try = [
@@ -71,7 +73,7 @@ def call_gemini_rest_api(api_key, system_instruction, prompt_text):
             }
         ],
         "generationConfig": {
-            "temperature": 0.2,
+            "temperature": 0.0,
             "responseMimeType": "application/json"
         }
     }
@@ -102,45 +104,78 @@ def call_gemini_rest_api(api_key, system_instruction, prompt_text):
     return None
 
 
+@functools.lru_cache(maxsize=512)
 def normalize_search_query(user_query, api_key=None):
     """
-    LLM-Powered Semantic Query Rewriter:
-    Uses Gemini LLM (or smart fallback) to convert ANY natural language query
-    (Tamil, English, Tanglish, informal, shorthand) into a clean, canonical
-    English semantic search query optimized for ChromaDB vector memory retrieval.
+    Deterministic LLM & Domain Semantic Query Normalizer:
+    1. Caches results in memory via lru_cache so repeated identical queries produce
+       100% deterministic search representations every time with 0ms latency.
+    2. Uses zero-temperature greedy decoding to guarantee repeatable query generation.
+    3. Falls back to a rich SME domain lexicon covering wholesale inventory, utilities,
+       commercial rent, tech hardware, tax, and retail sales.
     """
     if not api_key:
         api_key = os.getenv("GEMINI_API_KEY")
 
     if api_key:
         system_prompt = (
-            "You are a semantic query rewriting engine for vector database retrieval. "
-            "Convert the user's input (in English, Tamil, Tanglish, or any phrasing) into a concise 1-sentence "
-            "canonical English search query highlighting the transaction domain, item/service, category, and intent. "
-            "Respond ONLY with the rewritten English search text."
+            "You are a deterministic semantic query rewriting engine for vector database retrieval. "
+            "Convert the user's proposal into a concise 1-sentence canonical English search query "
+            "highlighting the transaction domain, item/service, category, and intent. "
+            "Respond ONLY with the single English search sentence. Do not return JSON."
         )
         try:
             rewritten = call_gemini_rest_api(api_key, system_prompt, f"User Input: \"{user_query}\"")
             if rewritten and len(rewritten.strip()) > 3:
                 clean_rewritten = rewritten.strip().strip('"').strip("'")
-                print(f"[RAG Engine] Semantic LLM Query Rewrite: '{user_query}' -> '{clean_rewritten}'")
-                return f"{clean_rewritten} {user_query}"
+                # Unwrap JSON if model returned JSON payload
+                if clean_rewritten.startswith("{"):
+                    try:
+                        parsed_json = json.loads(clean_rewritten)
+                        clean_rewritten = (
+                            parsed_json.get("query") or 
+                            parsed_json.get("search_query") or 
+                            parsed_json.get("canonical_query") or 
+                            list(parsed_json.values())[0]
+                        )
+                    except Exception:
+                        pass
+                # Ensure query passed to ChromaDB is purely canonical English
+                # (all-MiniLM-L6-v2 vocabulary does not contain Tamil characters)
+                numbers = re.findall(r'\b\d+(?:,\d+)*(?:\.\d+)?\b', user_query)
+                amount_hint = f" amount {numbers[0].replace(',', '')}" if numbers and numbers[0].replace(',', '') not in clean_rewritten else ""
+                return f"{clean_rewritten}{amount_hint}".strip()
         except Exception as e:
             print(f"[RAG Engine] LLM query rewrite warning: {e}")
 
-    # Fallback heuristic normalization
-    search_text = user_query
+    # Fallback deterministic domain lexicon expansion
+    numbers = re.findall(r'\b\d+(?:,\d+)*(?:\.\d+)?\b', user_query)
+    amount_str = f"amount {numbers[0].replace(',', '')}" if numbers else ""
+
     if any('\u0b80' <= char <= '\u0bff' for char in user_query):
-        tamil_map = {
-            "காலேஜ்": "college", "ஃபீஸ்": "fees tuition", "பையனுக்கு": "son child family",
-            "கட்டலாமா": "pay spend fee", "லேப்டாப்": "laptop computer", "வாடகை": "rent lease",
-            "கணினி": "computer", "விளம்பரம்": "advertising marketing", "கட்டணம்": "fee payment"
-        }
-        augmented = [eng for word, eng in tamil_map.items() if word in user_query]
+        tamil_domain_lexicon = [
+            (r'சரக்கு|பொருட்கள்|சரக்குகள்|மளிகை|சரக்குப்பொருட்கள்', 'inventory restocking stock goods merchandise wholesale supplies store restock ABC Traders'),
+            (r'வாங்க|வாங்கலாமா|கொள்முதல்|வாங்குதல்', 'purchase buy spend order acquisition procurement outlay'),
+            (r'மின்சார|மின்சாரம்|கரண்ட்|tneb', 'electricity power utility tneb monthly bill payment'),
+            (r'வாடகை', 'office rent building lease commercial premise property'),
+            (r'விளம்பரம்|விளம்பர|விளம்பரங்கள்', 'advertising marketing ads campaign promotions google meta'),
+            (r'கணினி|லேப்டாப்|மடிக்கணினி|கம்ப்யூட்டர்', 'laptop computer electronics hardware equipment dell hp'),
+            (r'கல்லூரி|காலேஜ்|பள்ளி|படிப்பு|ஃபீஸ்|கல்வி|பையன்|மகன்', 'college university education tuition fees schooling academic'),
+            (r'சம்பளம்|ஊதியம்', 'payroll salary staff employees wages compensation'),
+            (r'இணையம்|பிராட்பேண்ட்|வைஃபை', 'internet broadband airtel telecom data connectivity'),
+            (r'வரி|ஆடிட்டர்|தணிக்கை|ஜிஎஸ்டி|கட்டணம்', 'tax auditor gst audit compliance accounting ca legal fees'),
+            (r'வரவு|வருமானம்|வாடிக்கையாளர்|பணம்|பெறுதல்', 'client customer revenue payment collection income settlement receipt')
+        ]
+        augmented = []
+        for pattern, eng in tamil_domain_lexicon:
+            if re.search(pattern, user_query, re.IGNORECASE):
+                augmented.append(eng)
         if augmented:
-            search_text = f"{user_query} {' '.join(augmented)}"
+            search_text = f"{' '.join(augmented)} {amount_str}".strip()
         else:
-            search_text = f"{user_query} college tuition fees expense"
+            search_text = f"general business operating transaction expense {amount_str}".strip()
+    else:
+        search_text = user_query
 
     return search_text
 
@@ -201,6 +236,12 @@ def translate_outcome_to_tamil(outcome):
         return "அவசியமான செலவு"
     if o == "wasteful":
         return "வீண் செலவு"
+    if o == "profitable":
+        return "லாபகரமான முதலீடு"
+    if o in ["break-even", "break_even"]:
+        return "சமநிலை செலவு"
+    if o == "pending":
+        return "மதிப்பீடு நிலுவையில்"
     return "ஆரோக்கியமான நிலை"
 
 
@@ -234,10 +275,26 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
     """
     api_key = os.getenv("GEMINI_API_KEY")
 
+    # Detect transaction direction: income (receiving money) vs expense (spending money)
+    income_signals = [
+        'receive', 'income', 'payment from', 'client payment', 'revenue',
+        'received', 'collection', 'receivable', 'வரவு', 'வருமானம்', 'பெறுதல்',
+        'bill client', 'collect from', 'customer payment', 'sales revenue',
+        'பணம் வந்தது', 'கிடைத்தது'
+    ]
+    is_income_query = any(s in user_query.lower() for s in income_signals)
+    target_txn_type = "income" if is_income_query else "expense"
+
     # 1. Retrieve Similar Cases from ChromaDB Vector Store with LLM Semantic Query Rewriting
+    # Strictly filtered by transaction_type so expense proposals only compare against past expenses,
+    # and income proposals only compare against past revenue receipts.
     try:
         search_query = normalize_search_query(user_query, api_key=api_key)
-        retrieved_cases = query_similar_cases(query_text=search_query, top_k=top_k)
+        retrieved_cases = query_similar_cases(
+            query_text=search_query, 
+            top_k=top_k, 
+            transaction_type=target_txn_type
+        )
     except Exception as e:
         print(f"[RAG Engine] Vector search warning: {e}")
         retrieved_cases = []
@@ -260,8 +317,16 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
         print(f"[RAG Engine] Forecast fetch warning: {e}")
 
     # 3. Calculate Adaptive Blending Weight
+    # Weight combines retrieval count factor with average similarity quality factor
+    # so the weight genuinely varies per query instead of always being 80%
     num_cases = len(retrieved_cases)
-    blend_weight = min(num_cases / 5.0, 1.0)
+    if num_cases > 0:
+        avg_similarity = sum(c.get('similarity_score', 50) for c in retrieved_cases) / num_cases
+        count_factor = min(num_cases / 5.0, 1.0)          # 0.0–1.0 based on how many cases found
+        quality_factor = max(0.0, min(avg_similarity / 100.0, 1.0))  # 0.0–1.0 based on match quality
+        blend_weight = round(count_factor * quality_factor, 2)
+    else:
+        blend_weight = 0.0
 
     # Format retrieved cases for prompt
     cases_text_list = []
@@ -308,20 +373,23 @@ def generate_advisor_recommendation(user_query, top_k=4, language="en"):
 
     # Parse expected amount from query
     parsed_amount = extract_amount_from_query(user_query, api_key=api_key)
-    expected_post_bal = current_balance - parsed_amount
+    expected_post_bal = current_balance + parsed_amount if is_income_query else current_balance - parsed_amount
 
     parsed_amt_str = f"{parsed_amount:,.2f}"
     exp_post_bal_str = f"{expected_post_bal:,.2f}"
     curr_bal_str = f"{current_balance:,.2f}"
     alert_thresh_str = f"{BALANCE_ALERT_THRESHOLD:,.2f}"
     blend_wt_str = f"{blend_weight:.2f}"
+    direction_desc = "INCOME (Receiving Money / Client Settlement)" if is_income_query else "EXPENSE (Spending Money / Vendor Purchase)"
 
     prompt = f"""
 USER PROPOSAL / QUERY:
 "{user_query}"
 
+PROPOSAL DIRECTION: {direction_desc}
+
 EXTRACTED PROPOSAL DETAILS:
-- Parsed Numerical Transaction Outlay: Rs. {parsed_amt_str}
+- Numerical Proposal Amount: Rs. {parsed_amt_str}
 - Estimated Post-Transaction Reserve: Rs. {exp_post_bal_str}
 
 LIVE FINANCIAL CONTEXT:
@@ -329,17 +397,18 @@ LIVE FINANCIAL CONTEXT:
 - Safety Alert Threshold: Rs. {alert_thresh_str}
 - Cash Flow Forecast Summary: {forecast_summary}
 
-PAST CASE MEMORY (Retrieved via Cosine Similarity from ChromaDB):
+PAST CASE MEMORY (Retrieved via Cosine Similarity from ChromaDB - Filtered to {target_txn_type.upper()} cases):
 {formatted_cases}
 
 ADAPTIVE BLENDING WEIGHT: {blend_wt_str} (1.00 means high historical grounding; 0.00 means generic rules).
 
 CRITICAL GROUNDING INSTRUCTIONS:
-Retrieved Past Case Memories from ChromaDB vector memory are provided above. YOU MUST ALWAYS EXPLICITLY CITE AND COMPARE THE USER PROPOSAL AGAINST THESE RETRIEVED PAST CASES in both your 'explanation' and 'key_factors':
-1. Identify the most relevant past case from the retrieved list (e.g. Croma Electronics, Dell India, HP Store, IFET College, etc.).
-2. EXPLICITLY MENTION THE PAST VENDOR NAME, PAST AMOUNT, AND HISTORICAL OUTCOME STATE (HEALTHY / STRAINED) in your 'explanation' and 'key_factors'.
+Retrieved Past Case Memories from ChromaDB vector memory are provided above (filtered to match proposal transaction type). YOU MUST ALWAYS EXPLICITLY CITE AND COMPARE THE USER PROPOSAL AGAINST THESE RETRIEVED PAST CASES in both your 'explanation' and 'key_factors':
+1. Identify the most relevant past case from the retrieved list.
+2. EXPLICITLY MENTION THE PAST VENDOR/CLIENT NAME, PAST AMOUNT, AND HISTORICAL OUTCOME STATE (HEALTHY / STRAINED / PROFITABLE / WASTEFUL / BREAK-EVEN) in your 'explanation' and 'key_factors'.
    - In Tamil responses, keep original naming words with Tamil translations in brackets.
-3. Explain what lesson was learned from that past expenditure and why it supports or warns against the current proposal.
+   - SEMANTIC INTEGRITY: Respect the transaction direction! If comparing an expense, describe past money spent. If comparing income, describe past revenue received. Never describe income as spending or spending as income.
+3. Explain what lesson was learned from that past experience and why it supports or warns against the current proposal.
 4. Combine that historical case comparison with your live balance and 30-day forecast trajectory to form your final verdict.
 
 {lang_instruction}
@@ -360,13 +429,13 @@ Analyze the user proposal and respond in STRICT JSON format with EXACTLY these k
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         print("[RAG Engine] Warning: GEMINI_API_KEY missing in environment.")
-        return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight)
+        return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language=language)
 
     response_text = call_gemini_rest_api(api_key, system_instruction, prompt)
 
     if not response_text:
         print("[RAG Engine] All Gemini model invocations failed. Falling back to heuristic rule engine.")
-        return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight)
+        return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language=language)
 
     # Parse JSON output from Gemini
     try:
@@ -384,7 +453,7 @@ Analyze the user proposal and respond in STRICT JSON format with EXACTLY these k
         return parsed
     except Exception as parse_err:
         print(f"[RAG Engine] JSON parse error on LLM response: {parse_err}. Raw response: {response_text}")
-        return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight)
+        return fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language=language)
 
 
 def extract_amount_from_query(user_query, api_key=None):
@@ -449,15 +518,15 @@ def extract_amount_from_query(user_query, api_key=None):
         (r'மூன்றாயிர|மூன்று\s*ஆயிர', 3000.0),
         (r'இரண்டாயிர|ரெண்டாயிர|இரண்டு\s*ஆயிர|ரெண்டு\s*ஆயிர', 2000.0),
         (r'ஒராயிர|ஒரு\s*ஆயிர|ஆயிர', 1000.0),
-        # Tanglish
-        (r'irubathaayiram|irubathayiram|irupathayiram|irubadhayiram|20k', 20000.0),
-        (r'pathaayiram|pathayiram|pathadhayiram|10k', 10000.0),
-        (r'muppathayiram|30k', 30000.0),
-        (r'narpathayiram|40k', 40000.0),
-        (r'aimbathayiram|aimpathayiram|50k', 50000.0),
-        (r'arubathayiram|60k', 60000.0),
-        (r'ezhubathayiram|70k', 70000.0),
-        (r'enbathayiram|80k', 80000.0),
+        # Tanglish (note: Nk patterns like 20k, 50k are already handled by the k_match regex above)
+        (r'irubathaayiram|irubathayiram|irupathayiram|irubadhayiram', 20000.0),
+        (r'pathaayiram|pathayiram|pathadhayiram', 10000.0),
+        (r'muppathayiram', 30000.0),
+        (r'narpathayiram', 40000.0),
+        (r'aimbathayiram|aimpathayiram', 50000.0),
+        (r'arubathayiram', 60000.0),
+        (r'ezhubathayiram', 70000.0),
+        (r'enbathayiram', 80000.0),
     ]
 
     for pattern, amt in tamil_number_patterns:
@@ -487,8 +556,17 @@ def extract_amount_from_query(user_query, api_key=None):
 def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, blend_weight, language="en"):
     """Fallback rule engine if LLM call is unavailable or fails."""
     is_tamil = language == "ta" or any('\u0b80' <= char <= '\u0bff' for char in user_query)
+    
+    income_signals = [
+        'receive', 'income', 'payment from', 'client payment', 'revenue',
+        'received', 'collection', 'receivable', 'வரவு', 'வருமானம்', 'பெறுதல்',
+        'bill client', 'collect from', 'customer payment', 'sales revenue',
+        'பணம் வந்தது', 'கிடைத்தது'
+    ]
+    is_income_proposal = any(s in user_query.lower() for s in income_signals)
+
     est_amount = extract_amount_from_query(user_query)
-    post_bal = current_balance - est_amount
+    post_bal = current_balance + est_amount if is_income_proposal else current_balance - est_amount
 
     # Extract top matching past case memory details if available
     top_case_text_ta = ""
@@ -503,12 +581,18 @@ def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, b
         v_out = c0.get('outcome', c0.get('metadata', {}).get('outcome', 'healthy')).upper()
         v_cat = c0.get('category', c0.get('metadata', {}).get('category', ''))
         v_notes = c0.get('notes', c0.get('metadata', {}).get('notes', ''))
+        case_txn_type = c0.get('transaction_type', c0.get('metadata', {}).get('transaction_type', 'expense'))
+        is_case_income = case_txn_type in ('income', 'return_in')
 
-        # English versions
         cat_str_en = f" [{v_cat}]" if v_cat else ""
         note_str_en = f" — '{v_notes}'" if v_notes else ""
-        top_case_text_en = f"Comparing this proposal with past {v_name}{cat_str_en} transaction of Rs. {v_amt:,.2f} (Outcome: {v_out}{note_str_en}), "
-        top_case_factor_en = f"Similar past case comparison: {v_name}{cat_str_en} - Rs. {v_amt:,.2f} (Historical Outcome: {v_out})"
+
+        if is_case_income:
+            top_case_text_en = f"Comparing this proposal with past {v_name}{cat_str_en} revenue receipt of Rs. {v_amt:,.2f} (Outcome: {v_out}{note_str_en}), "
+            top_case_factor_en = f"Past revenue precedent: {v_name}{cat_str_en} - Rs. {v_amt:,.2f} (Historical Outcome: {v_out})"
+        else:
+            top_case_text_en = f"Comparing this proposal with past {v_name}{cat_str_en} expenditure of Rs. {v_amt:,.2f} (Outcome: {v_out}{note_str_en}), "
+            top_case_factor_en = f"Similar past expense: {v_name}{cat_str_en} - Rs. {v_amt:,.2f} (Historical Outcome: {v_out})"
 
         # Bracketed Naming Words versions (Original Naming Word + Tamil Translation in Brackets)
         v_ta = translate_vendor_to_tamil(v_name)
@@ -519,15 +603,31 @@ def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, b
         v_combined_ta = f"{v_name} ({v_ta})" if v_ta and v_ta != v_name else v_name
         cat_combined_ta = f" [{v_cat} ({c_ta})]" if v_cat and c_ta != v_cat else (f" [{v_cat}]" if v_cat else "")
         out_combined_ta = f"{v_out} ({o_ta})"
-
         note_str_ta = f" — '{n_ta}'" if n_ta else ""
-        top_case_text_ta = f"முன்பு {v_combined_ta}{cat_combined_ta} நிறுவனத்தில் ரூ. {v_amt:,.2f} செலவிடப்பட்ட போது பெறப்பட்ட அனுபவத்துடன் (நிலை: {out_combined_ta}{note_str_ta}) ஒப்பிடுகையில், "
-        top_case_factor_ta = f"ஒத்த முந்தைய நிகழ்வு ஒப்பீடு: {v_combined_ta}{cat_combined_ta} - ரூ. {v_amt:,.2f} (நிலை: {out_combined_ta})"
+
+        if is_case_income:
+            action_verb_ta = "வரவு பெறப்பட்ட போது"
+            factor_prefix_ta = "முந்தைய வருவாய் ஒப்பீடு"
+        else:
+            action_verb_ta = "செலவிடப்பட்ட போது"
+            factor_prefix_ta = "ஒத்த முந்தைய செலவு ஒப்பீடு"
+
+        top_case_text_ta = f"முன்பு {v_combined_ta}{cat_combined_ta} நிறுவனத்தில் ரூ. {v_amt:,.2f} {action_verb_ta} பெறப்பட்ட அனுபவத்துடன் (நிலை: {out_combined_ta}{note_str_ta}) ஒப்பிடுகையில், "
+        top_case_factor_ta = f"{factor_prefix_ta}: {v_combined_ta}{cat_combined_ta} - ரூ. {v_amt:,.2f} (நிலை: {out_combined_ta})"
 
     # Check for personal / education keyword context
     is_personal_education = any(w in user_query.lower() for w in ['college', 'fees', 'tuition', 'son', 'school', 'education', 'காலேஜ்', 'ஃபீஸ்'])
 
-    if post_bal >= 50000.0 and not is_personal_education:
+    if is_income_proposal:
+        verdict = "Recommended"
+        risk_level = "Low"
+        if is_tamil:
+            exp = f"{top_case_text_ta}ரூ. {est_amount:,.2f} வரவு உங்கள் தற்போதைய ரொக்க இருப்பு ரூ. {current_balance:,.2f}-ஐ ரூ. {post_bal:,.2f} ஆக உயர்த்தும். இது நிறுவனத்தின் பணப்புழக்கத்தை மேலும் வலுப்படுத்தும்."
+            action = "இன்வாய்ஸ் மற்றும் தொகையை உறுதிசெய்து வரவு பதிவை மேற்கொள்ளலாம்."
+        else:
+            exp = f"{top_case_text_en}receiving this expected revenue of ~Rs. {est_amount:,.2f} will increase your cash reserves from Rs. {current_balance:,.2f} to Rs. {post_bal:,.2f}, strengthening operational liquidity."
+            action = "Confirm deliverables and proceed with payment collection."
+    elif post_bal >= 50000.0 and not is_personal_education:
         verdict = "Recommended"
         risk_level = "Low"
         if is_tamil:
@@ -569,8 +669,8 @@ def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, b
             key_factors.append(top_case_factor_ta)
         key_factors.extend([
             f"தற்போதைய ரொக்க இருப்பு: ரூ. {current_balance:,.2f}",
-            f"கணக்கிடப்பட்ட செலவு: ரூ. {est_amount:,.2f}",
-            f"செலவுக்குப் பின் எதிர்பார்க்கப்படும் இருப்பு: ரூ. {post_bal:,.2f}"
+            f"{'எதிர்பார்க்கப்படும் வரவு' if is_income_proposal else 'கணக்கிடப்பட்ட செலவு'}: ரூ. {est_amount:,.2f}",
+            f"{'வரவுக்குப் பின் எதிர்பார்க்கப்படும் இருப்பு' if is_income_proposal else 'செலவுக்குப் பின் எதிர்பார்க்கப்படும் இருப்பு'}: ரூ. {post_bal:,.2f}"
         ])
     else:
         key_factors = []
@@ -578,17 +678,29 @@ def fallback_rule_recommendation(user_query, current_balance, retrieved_cases, b
             key_factors.append(top_case_factor_en)
         key_factors.extend([
             f"Live cash balance: Rs. {current_balance:,.2f}",
-            f"Parsed proposal outlay: Rs. {est_amount:,.2f}",
+            f"Parsed proposal {'receipt' if is_income_proposal else 'outlay'}: Rs. {est_amount:,.2f}",
             f"Projected post-transaction reserve: Rs. {post_bal:,.2f}"
         ])
 
     if retrieved_cases:
-        strained_count = sum(1 for c in retrieved_cases if c.get("outcome") == "strained" or c.get("metadata", {}).get("outcome") == "strained")
+        strained_count = sum(
+            1 for c in retrieved_cases 
+            if str(c.get("outcome") or c.get("metadata", {}).get("outcome", "")).lower() in ["strained", "wasteful", "strained_balance"]
+        )
+        profitable_count = sum(
+            1 for c in retrieved_cases 
+            if str(c.get("outcome") or c.get("metadata", {}).get("outcome", "")).lower() in ["profitable", "healthy", "healthy_balance", "productive"]
+        )
         if strained_count > 0:
             if is_tamil:
-                key_factors.append(f"கடந்த காலத்தில் {strained_count} ஒத்த பரிவர்த்தனைகள் தற்காலிக ரொக்க நெருக்கடியை ஏற்படுத்தின.")
+                key_factors.append(f"கடந்த காலத்தில் {strained_count} ஒத்த பரிவர்த்தனைகள் தற்காலிக ரொக்க நெருக்கடி அல்லது வீண் செலவை ஏற்படுத்தின.")
             else:
-                key_factors.append(f"{strained_count} similar past case(s) in history resulted in temporary liquidity strain.")
+                key_factors.append(f"{strained_count} similar past case(s) in history resulted in temporary liquidity strain or wasteful outlay.")
+        elif profitable_count > 0:
+            if is_tamil:
+                key_factors.append(f"கடந்த காலத்தில் {profitable_count} ஒத்த பரிவர்த்தனைகள் ஆரோக்கியமான அல்லது லாபகரமான நிதி நிலையைத் தந்தன.")
+            else:
+                key_factors.append(f"{profitable_count} similar past case(s) in history yielded healthy or profitable financial outcomes.")
 
     return {
         "verdict": verdict,

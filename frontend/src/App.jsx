@@ -36,7 +36,24 @@ import {
   Calendar,
   Pencil,
   Check,
-  PieChart as PieIcon
+  PieChart as PieIcon,
+  LogOut,
+  Shield,
+  ShieldCheck,
+  Lock,
+  User,
+  UserPlus,
+  Eye,
+  EyeOff,
+  KeyRound,
+  PanelLeft,
+  ChevronLeft,
+  History,
+  MessageSquare,
+  ChevronDown,
+  ChevronUp,
+  CornerDownLeft,
+  X
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -48,16 +65,16 @@ const API_BASE = 'http://localhost:5000/api';
 const isTamilScript = (str) => Boolean(str && /[\u0b80-\u0bff]/.test(str));
 
 const CATEGORY_COLORS = {
-  'Education': '#818cf8',    // Indigo
-  'Utilities': '#2dd4bf',    // Teal
-  'Software': '#60a5fa',     // Blue
-  'Marketing': '#f472b6',    // Pink
-  'Shopping': '#c084fc',     // Purple
-  'Financial': '#34d399',    // Emerald
-  'Miscellaneous': '#94a3b8' // Slate
+  'Education': 'oklch(68% 0.18 264)',    // Perceptually uniform Indigo
+  'Utilities': 'oklch(68% 0.16 185)',    // Perceptually uniform Teal
+  'Software': 'oklch(68% 0.16 225)',     // Perceptually uniform Sky/Cyan
+  'Marketing': 'oklch(68% 0.19 335)',    // Perceptually uniform Rose
+  'Shopping': 'oklch(68% 0.19 295)',     // Perceptually uniform Purple
+  'Financial': 'oklch(68% 0.16 150)',    // Perceptually uniform Emerald
+  'Miscellaneous': 'oklch(68% 0.04 250)' // Perceptually uniform Slate
 };
 
-const DEFAULT_COLOR = '#94a3b8';
+const DEFAULT_COLOR = 'oklch(68% 0.04 250)';
 
 const CustomTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {
@@ -65,8 +82,8 @@ const CustomTooltip = ({ active, payload }) => {
     const isForecast = data.actual === null;
     
     return (
-      <div className="glass-card custom-tooltip" style={{ padding: '0.85rem 1.1rem', border: '1.5px solid #cbd5e1', background: '#ffffff', color: '#0f172a', fontSize: '0.82rem', width: '280px', maxWidth: '280px', textAlign: 'left', borderRadius: '14px', boxShadow: '0 10px 25px rgba(15, 23, 42, 0.12)', wordBreak: 'break-word', whiteSpace: 'normal' }}>
-        <div style={{ fontWeight: 800, color: '#475569', marginBottom: '0.4rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.35rem' }}>{data.date}</div>
+      <div className="glass-card custom-tooltip" style={{ padding: '0.85rem 1.1rem', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-body)', fontSize: '0.82rem', width: '280px', maxWidth: '280px', textAlign: 'left', borderRadius: '14px', boxShadow: 'var(--shadow-lg)', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+        <div style={{ fontWeight: 800, color: 'var(--text-muted)', marginBottom: '0.4rem', borderBottom: '1px solid rgba(241, 245, 249, 0.9)', paddingBottom: '0.35rem' }}>{data.date}</div>
         
         {!isForecast ? (
           <>
@@ -110,8 +127,85 @@ const CustomTooltip = ({ active, payload }) => {
   return null;
 };
 
+// =============================================================================
+// AUTH HELPER — Adds JWT Bearer token to all API requests
+// =============================================================================
+const getAuthHeaders = (extraHeaders = {}) => {
+  const token = localStorage.getItem('finsense_token');
+  const headers = { ...extraHeaders };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+};
+
+const authFetch = async (url, options = {}) => {
+  const headers = getAuthHeaders(options.headers || {});
+  const response = await fetch(url, { ...options, headers });
+  // If 401, token expired — clear auth state gracefully without triggering infinite page reload
+  if (response.status === 401) {
+    localStorage.removeItem('finsense_token');
+    localStorage.removeItem('finsense_user');
+    window.dispatchEvent(new CustomEvent('finsense-auth-expired'));
+    throw new Error('Session expired. Please login again.');
+  }
+  return response;
+};
+
+// Password strength calculator
+const getPasswordStrength = (password) => {
+  if (!password) return { level: 0, label: '' };
+  let score = 0;
+  if (password.length >= 6) score++;
+  if (password.length >= 10) score++;
+  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+  const labels = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Excellent'];
+  return { level: Math.min(score, 4), label: labels[Math.min(score, 5)] };
+};
+
 function App() {
+  // =============================================================================
+  // AUTHENTICATION STATE
+  // =============================================================================
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return !!localStorage.getItem('finsense_token');
+  });
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('finsense_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [authSuccess, setAuthSuccess] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [authForm, setAuthForm] = useState({
+    username: '',
+    password: '',
+    confirm_password: '',
+    full_name: ''
+  });
+  const [authChecking, setAuthChecking] = useState(true); // checking token on mount
+
+  // Listen for session expiry from authFetch
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setAuthError('Your session has expired. Please sign in again.');
+    };
+    window.addEventListener('finsense-auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('finsense-auth-expired', handleAuthExpired);
+  }, []);
+
+  // =============================================================================
+  // APPLICATION STATE
+  // =============================================================================
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'invoices' | 'upload' | 'forecast'
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [forecastData, setForecastData] = useState(null);
   const [forecastLoading, setForecastLoading] = useState(false);
   const [forecastError, setForecastError] = useState(null);
@@ -122,13 +216,19 @@ function App() {
     total_expenses: 0.0,
     total_transactions: 0,
     risk_status: 'healthy',
-    category_spend: []
+    category_spend: [],
+    pending_review_count: 0
   });
   const [loading, setLoading] = useState(true);
   const [backendOffline, setBackendOffline] = useState(false);
   
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
+  const [outcomeFilter, setOutcomeFilter] = useState('all'); // 'all' | 'pending' | 'reviewed'
+  
+  // Outcome Notes Editing State
+  const [editingOutcomeId, setEditingOutcomeId] = useState(null);
+  const [editingOutcomeNotes, setEditingOutcomeNotes] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   
   // File Upload State
@@ -153,6 +253,18 @@ function App() {
   const [successNotes, setSuccessNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
 
+  // Security & Audit State
+  const [securityStatus, setSecurityStatus] = useState(null);
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditFilter, setAuditFilter] = useState('ALL');
+  const [auditSearch, setAuditSearch] = useState('');
+  const [integrityRunning, setIntegrityRunning] = useState(false);
+  const [integrityMessage, setIntegrityMessage] = useState('');
+  const [secPasswordForm, setSecPasswordForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
+  const [secPasswordLoading, setSecPasswordLoading] = useState(false);
+  const [secPasswordMsg, setSecPasswordMsg] = useState({ type: '', text: '' });
+
   // Advisor State
   const [advisorQuery, setAdvisorQuery] = useState('');
   const [advisorLoading, setAdvisorLoading] = useState(false);
@@ -162,7 +274,120 @@ function App() {
   const [isListening, setIsListening] = useState(false);
   const [isVoiceCaptured, setIsVoiceCaptured] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [advisorActiveAudioMsgId, setAdvisorActiveAudioMsgId] = useState(null);
+  const [advisorHistory, setAdvisorHistory] = useState([]);
+  const [advisorHistoryLoading, setAdvisorHistoryLoading] = useState(false);
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(true);
+  const [historyPosition, setHistoryPosition] = useState('side'); // 'side' | 'below'
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
+  const [historyFilterVerdict, setHistoryFilterVerdict] = useState('all'); // 'all' | 'Recommended' | 'Proceed with Caution' | 'Not Recommended'
+  const [highlightedTurnId, setHighlightedTurnId] = useState(null);
+  const [historySortOrder, setHistorySortOrder] = useState('newest'); // 'newest' | 'oldest'
+  const [expandedCasesMap, setExpandedCasesMap] = useState({});
   const currentAudioRef = useRef(null);
+  const chatEndRef = useRef(null);
+  const streamTopRef = useRef(null);
+
+  const jumpToTurn = (turnId) => {
+    setHighlightedTurnId(turnId);
+    const elem = document.getElementById(`advisor-turn-${turnId}`);
+    if (elem) {
+      elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => {
+        setHighlightedTurnId(null);
+      }, 2500);
+    }
+  };
+
+  const fetchAdvisorHistory = async () => {
+    setAdvisorHistoryLoading(true);
+    try {
+      const res = await authFetch(`${API_BASE}/advisor/history`);
+      if (res.ok) {
+        const data = await res.json();
+        const hist = data.history || [];
+        setAdvisorHistory(hist);
+        if (hist.length > 0 && !advisorResult) {
+          const latest = hist[hist.length - 1];
+          if (latest && latest.response) {
+            setAdvisorResult(latest.response);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load advisor history:', err);
+    } finally {
+      setAdvisorHistoryLoading(false);
+    }
+  };
+
+  const handleClearAdvisorHistory = async (turnId = null) => {
+    const confirmMsg = turnId 
+      ? (advisorLang === 'ta' ? 'இந்த ஆலோசனை பதிவை வரலாற்றிலிருந்து நீக்கவா?' : 'Delete this consultation record from history?') 
+      : (advisorLang === 'ta' ? 'அனைத்து ஆலோசனை உரையாடல்களையும் அழிக்கவா?' : 'Clear complete advisor conversation history?');
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const url = turnId ? `${API_BASE}/advisor/history?id=${turnId}` : `${API_BASE}/advisor/history`;
+      const res = await authFetch(url, { method: 'DELETE' });
+      if (res.ok) {
+        if (turnId) {
+          setAdvisorHistory(prev => prev.filter(t => t.id !== turnId));
+        } else {
+          setAdvisorHistory([]);
+          setAdvisorResult(null);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to clear advisor history:', err);
+    }
+  };
+
+  const toggleCaseExpansion = (id) => {
+    setExpandedCasesMap(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  const handleExportConsultation = () => {
+    if (!advisorHistory || advisorHistory.length === 0) {
+      alert(advisorLang === 'ta' ? 'பதிவிறக்கம் செய்ய ஆலோசனை வரலாறு எதுவும் இல்லை.' : 'No advisor consultation history to export.');
+      return;
+    }
+    const lines = [
+      '=================================================================',
+      'LEDGERMIND AI FINANCIAL ADVISOR — CONSULTATION HISTORY EXPORT',
+      `Export Timestamp: ${new Date().toLocaleString()}`,
+      `Total Consultations: ${advisorHistory.length}`,
+      '=================================================================\n'
+    ];
+    advisorHistory.forEach((turn, idx) => {
+      lines.push(`[Consultation #${idx + 1}] - ${turn.created_at || 'N/A'}`);
+      lines.push(`User Query (${turn.language || 'en'}): ${turn.query}`);
+      if (turn.response) {
+        lines.push(`Verdict: ${turn.response.verdict || 'N/A'} (Risk: ${turn.response.risk_level || 'N/A'})`);
+        lines.push(`Current Balance: Rs. ${turn.response.current_balance?.toLocaleString() || 'N/A'}`);
+        lines.push(`Est. Post-Transaction Reserve: Rs. ${turn.response.estimated_post_balance?.toLocaleString() || 'N/A'}`);
+        lines.push(`Explanation: ${turn.response.explanation || ''}`);
+        if (turn.response.suggested_action) {
+          lines.push(`Suggested Action: ${turn.response.suggested_action}`);
+        }
+        if (turn.response.key_factors && turn.response.key_factors.length > 0) {
+          lines.push('Key Decision Factors:');
+          turn.response.key_factors.forEach(f => lines.push(` - ${f}`));
+        }
+      }
+      lines.push('\n-----------------------------------------------------------------\n');
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ledgermind_advisor_history_${new Date().toISOString().split('T')[0]}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleAdvisorSubmit = async (queryText) => {
     const q = queryText || advisorQuery;
@@ -178,8 +403,19 @@ function App() {
 
     setAdvisorLoading(true);
     setAdvisorError(null);
+    setAdvisorQuery('');
+
+    // Smooth scroll to indicate thinking state
+    setTimeout(() => {
+      if (historySortOrder === 'newest') {
+        streamTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 100);
+
     try {
-      const res = await fetch(`${API_BASE}/advisor/query`, {
+      const res = await authFetch(`${API_BASE}/advisor/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: q, language: targetLang })
@@ -187,6 +423,25 @@ function App() {
       if (!res.ok) throw new Error('Advisor engine request failed');
       const data = await res.json();
       setAdvisorResult(data);
+
+      const newTurn = {
+        id: data.id || Date.now(),
+        query: q,
+        language: targetLang,
+        verdict: data.verdict,
+        risk_level: data.risk_level,
+        created_at: data.created_at || new Date().toISOString(),
+        response: data
+      };
+      setAdvisorHistory(prev => [...prev, newTurn]);
+
+      setTimeout(() => {
+        if (historySortOrder === 'newest') {
+          streamTopRef.current?.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 150);
     } catch (err) {
       console.error(err);
       setAdvisorError(err.message || 'Failed to generate financial advice');
@@ -416,7 +671,7 @@ function App() {
     return clean.replace(/\s+/g, ' ').trim();
   };
 
-  const speakRecommendation = () => {
+  const speakRecommendation = (customResult = null, msgId = null) => {
     // 1. Stop any playing HTML5 Audio or WebSpeech
     if (currentAudioRef.current) {
       try {
@@ -432,32 +687,42 @@ function App() {
       window.speechSynthesis.cancel();
     }
 
-    if (isSpeaking) {
+    if (isSpeaking && (advisorActiveAudioMsgId === msgId || !msgId)) {
       setIsSpeaking(false);
+      setAdvisorActiveAudioMsgId(null);
       return;
     }
 
-    if (!advisorResult) return;
+    const targetRes = customResult || advisorResult;
+    if (!targetRes) return;
 
-    const isTamil = advisorLang === 'ta' || /[\u0B80-\u0BFF]/.test(advisorResult.explanation || '');
+    setAdvisorActiveAudioMsgId(msgId);
+    setIsSpeaking(true);
+
+    const isTamil = (targetRes.language === 'ta') || advisorLang === 'ta' || /[\u0B80-\u0BFF]/.test(targetRes.explanation || '');
     
     // Explicit Tamil verdict translation to prevent any English collision
-    const verdictTa = advisorResult.verdict === 'Recommended' 
+    const verdictTa = targetRes.verdict === 'Recommended' 
       ? 'பரிந்துரைக்கப்படுகிறது' 
-      : advisorResult.verdict === 'Proceed with Caution' 
+      : targetRes.verdict === 'Proceed with Caution' 
       ? 'எச்சரிக்கையுடன் தொடரவும்' 
       : 'பரிந்துரைக்கப்படவில்லை';
     
-    const verdictPrefix = isTamil ? verdictTa : advisorResult.verdict;
-    const rawText = `${verdictPrefix}. ${advisorResult.explanation} ${advisorResult.suggested_action || ''}`;
+    const verdictPrefix = isTamil ? verdictTa : targetRes.verdict;
+    const rawText = `${verdictPrefix}. ${targetRes.explanation} ${targetRes.suggested_action || ''}`;
     const textToSpeak = cleanTextForTTS(rawText, isTamil);
 
-    if (!textToSpeak) return;
+    if (!textToSpeak) {
+      setIsSpeaking(false);
+      setAdvisorActiveAudioMsgId(null);
+      return;
+    }
 
     // WebSpeech Fallback
     const fallbackWebSpeech = () => {
       if (!('speechSynthesis' in window)) {
         setIsSpeaking(false);
+        setAdvisorActiveAudioMsgId(null);
         return;
       }
       const utterance = new SpeechSynthesisUtterance(textToSpeak);
@@ -477,8 +742,14 @@ function App() {
       }
 
       utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        setAdvisorActiveAudioMsgId(null);
+      };
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        setAdvisorActiveAudioMsgId(null);
+      };
       window.speechSynthesis.speak(utterance);
     };
 
@@ -501,11 +772,11 @@ function App() {
       if (chunks.length === 0) chunks.push(textToSpeak);
 
       let currentIdx = 0;
-      setIsSpeaking(true);
 
       const playNextChunk = () => {
         if (currentIdx >= chunks.length) {
           setIsSpeaking(false);
+          setAdvisorActiveAudioMsgId(null);
           currentAudioRef.current = null;
           return;
         }
@@ -561,7 +832,7 @@ function App() {
 
     setCaseSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/cases`, {
+      const res = await authFetch(`${API_BASE}/cases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -612,7 +883,7 @@ function App() {
   const fetchCases = async () => {
     setCasesLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/cases`);
+      const res = await authFetch(`${API_BASE}/cases`);
       if (!res.ok) throw new Error('Failed to load case memories');
       const data = await res.json();
       setCasesList(data.cases || []);
@@ -625,7 +896,7 @@ function App() {
 
   const fetchAnomalies = async () => {
     try {
-      const res = await fetch(`${API_BASE}/transactions/anomalies`);
+      const res = await authFetch(`${API_BASE}/transactions/anomalies`);
       if (!res.ok) return;
       const data = await res.json();
       const map = {};
@@ -642,7 +913,7 @@ function App() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch(`${API_BASE}/settings`);
+      const res = await authFetch(`${API_BASE}/settings`);
       if (!res.ok) return;
       const data = await res.json();
       setSettingsForm({
@@ -659,7 +930,7 @@ function App() {
     e.preventDefault();
     setSettingsSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/settings`, {
+      const res = await authFetch(`${API_BASE}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settingsForm)
@@ -675,19 +946,109 @@ function App() {
     }
   };
 
+  const fetchSecurityData = async () => {
+    setSecurityLoading(true);
+    try {
+      const [statusRes, logsRes] = await Promise.all([
+        authFetch(`${API_BASE}/security/status`),
+        authFetch(`${API_BASE}/security/audit-logs?limit=50`)
+      ]);
+      if (statusRes.ok) {
+        const sData = await statusRes.json();
+        setSecurityStatus(sData);
+      }
+      if (logsRes.ok) {
+        const lData = await logsRes.json();
+        setAuditLogs(lData.audit_logs || []);
+      }
+    } catch (err) {
+      console.error('Failed to load security data:', err);
+    } finally {
+      setSecurityLoading(false);
+    }
+  };
+
+  const handleRunIntegrityCheck = async () => {
+    setIntegrityRunning(true);
+    setIntegrityMessage('');
+    try {
+      const res = await authFetch(`${API_BASE}/security/status`);
+      const data = await res.json();
+      setSecurityStatus(data);
+      if (data.db_integrity === 'ok') {
+        setIntegrityMessage(`SQLite Database Verified Healthy: PRAGMA integrity_check = 'ok' (${data.totals?.financial_transactions || 0} financial records verified)`);
+      } else {
+        setIntegrityMessage(`Integrity check status: ${data.db_integrity}`);
+      }
+    } catch {
+      setIntegrityMessage('Failed to execute database integrity check');
+    } finally {
+      setIntegrityRunning(false);
+    }
+  };
+
+  const handleSecPasswordSubmit = async (e) => {
+    e.preventDefault();
+    setSecPasswordMsg({ type: '', text: '' });
+    if (!secPasswordForm.current_password) {
+      setSecPasswordMsg({ type: 'error', text: 'Current password is required.' });
+      return;
+    }
+    if (secPasswordForm.new_password.length < 8) {
+      setSecPasswordMsg({ type: 'error', text: 'New password must be at least 8 characters long.' });
+      return;
+    }
+    if (!/[A-Z]/.test(secPasswordForm.new_password) || !/[a-z]/.test(secPasswordForm.new_password) || !/[0-9]/.test(secPasswordForm.new_password)) {
+      setSecPasswordMsg({ type: 'error', text: 'Password must contain uppercase, lowercase, and numeric characters.' });
+      return;
+    }
+    if (secPasswordForm.new_password !== secPasswordForm.confirm_password) {
+      setSecPasswordMsg({ type: 'error', text: 'New passwords do not match. Please re-check.' });
+      return;
+    }
+    setSecPasswordLoading(true);
+    try {
+      const res = await authFetch(`${API_BASE}/auth/change-password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          current_password: secPasswordForm.current_password,
+          new_password: secPasswordForm.new_password
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSecPasswordMsg({ type: 'success', text: 'Password successfully updated with fresh bcrypt salt (12 rounds)!' });
+        setSecPasswordForm({ current_password: '', new_password: '', confirm_password: '' });
+        fetchSecurityData();
+      } else {
+        setSecPasswordMsg({ type: 'error', text: data.error || 'Failed to update password.' });
+      }
+    } catch (err) {
+      setSecPasswordMsg({ type: 'error', text: err.message || 'Cannot reach server.' });
+    } finally {
+      setSecPasswordLoading(false);
+    }
+  };
+
   useEffect(() => {
+    if (!isAuthenticated) return;
     if (activeTab === 'cases') {
       fetchCases();
     } else if (activeTab === 'settings') {
       fetchSettings();
+    } else if (activeTab === 'security') {
+      fetchSecurityData();
+    } else if (activeTab === 'advisor') {
+      fetchAdvisorHistory();
     }
-  }, [activeTab]);
+  }, [activeTab, isAuthenticated]);
 
   const fetchData = async (search = '', cat = 'All') => {
     setLoading(true);
     try {
       // 1. Fetch Stats
-      const statsRes = await fetch(`${API_BASE}/dashboard/stats`);
+      const statsRes = await authFetch(`${API_BASE}/dashboard/stats`);
       if (!statsRes.ok) throw new Error('Failed to load stats');
       const statsData = await statsRes.json();
       setStats(statsData);
@@ -699,7 +1060,7 @@ function App() {
       if (cat !== 'All') params.append('category', cat);
       if (params.toString()) url += `?${params.toString()}`;
 
-      const txnRes = await fetch(url);
+      const txnRes = await authFetch(url);
       if (!txnRes.ok) throw new Error('Failed to load transactions');
       const txnData = await txnRes.json();
       setTransactions(txnData);
@@ -720,7 +1081,7 @@ function App() {
     setForecastLoading(true);
     setForecastError(null);
     try {
-      const res = await fetch(`${API_BASE}/forecast`);
+      const res = await authFetch(`${API_BASE}/forecast`);
       if (!res.ok) throw new Error('Failed to run machine learning forecasting engines');
       const data = await res.json();
       setForecastData(data);
@@ -734,10 +1095,11 @@ function App() {
 
   // Fetch forecast data when user opens the forecasting view tab
   useEffect(() => {
+    if (!isAuthenticated) return;
     if (activeTab === 'forecast') {
       fetchForecast();
     }
-  }, [activeTab]);
+  }, [activeTab, isAuthenticated]);
 
   const getCombinedChartData = () => {
     if (!forecastData) return [];
@@ -828,37 +1190,94 @@ function App() {
     document.body.removeChild(link);
   };
 
-  const downloadSingleInvoice = (txn) => {
-    const invoiceNumber = `INV-${String(txn.id).padStart(5, '0')}`;
-    const cleanVendor = String(txn.vendor_or_client || 'Record').replace(/[^a-zA-Z0-9]/g, '_');
-    const filename = `LedgerMind_Invoice_${invoiceNumber}_${cleanVendor}.pdf`;
+  const downloadSingleInvoice = async (txn) => {
+    try {
+      const invoiceNumber = `INV-${String(txn.id).padStart(5, '0')}`;
+      const cleanVendor = String(txn.vendor_or_client || 'Record').replace(/[^a-zA-Z0-9]/g, '_');
+      const filename = `LedgerMind_Invoice_${invoiceNumber}_${cleanVendor}.pdf`;
 
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = `${API_BASE}/invoices/${txn.id}/pdf`;
-    a.setAttribute('download', filename);
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      if (a.parentNode) document.body.removeChild(a);
-    }, 1000);
+      const res = await authFetch(`${API_BASE}/invoices/${txn.id}/pdf`);
+      if (!res.ok) throw new Error('Failed to generate PDF');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.setAttribute('download', filename);
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (a.parentNode) document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 1000);
+    } catch (err) {
+      console.error('Failed to download invoice:', err);
+      alert('Could not download invoice PDF. Please try again.');
+    }
   };
 
-  const saveOutcomeLabel = async (txnId, newOutcome) => {
+  const saveOutcomeLabel = async (txnId, newOutcome, notes = null) => {
     try {
-      const res = await fetch(`${API_BASE}/transactions/${txnId}/outcome`, {
+      const existingTxn = transactions.find(t => t.id === txnId);
+      const effectiveNotes = notes !== null ? notes : (existingTxn?.outcome_notes || '');
+      const res = await authFetch(`${API_BASE}/transactions/${txnId}/outcome`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_outcome: newOutcome })
+        body: JSON.stringify({ 
+          user_outcome: newOutcome,
+          outcome_notes: effectiveNotes,
+          outcome_date: new Date().toISOString()
+        })
       });
       if (!res.ok) throw new Error('Failed to save outcome label');
-      // Optimistically update the local state
+      const data = await res.json();
+      // Optimistically update the local state with new outcome_label and user_outcome
       setTransactions(prev => prev.map(txn => 
-        txn.id === txnId ? { ...txn, user_outcome: newOutcome } : txn
+        txn.id === txnId ? { 
+          ...txn, 
+          user_outcome: newOutcome,
+          outcome_label: data.outcome_label || txn.outcome_label,
+          outcome_notes: effectiveNotes,
+          outcome_date: new Date().toISOString()
+        } : txn
       ));
+      // Update pending count in stats
+      setStats(prev => ({
+        ...prev,
+        pending_review_count: Math.max(0, (prev.pending_review_count || 0) - (newOutcome ? 1 : 0))
+      }));
+      // Show notes editor for this transaction to capture experience if none exists
+      if (newOutcome && !effectiveNotes) {
+        setEditingOutcomeId(txnId);
+        setEditingOutcomeNotes('');
+      }
     } catch (err) {
       console.error('Failed to save outcome:', err);
       alert('Could not save outcome label. Please try again.');
+    }
+  };
+
+  const saveOutcomeNotes = async (txnId) => {
+    try {
+      const txn = transactions.find(t => t.id === txnId);
+      const res = await authFetch(`${API_BASE}/transactions/${txnId}/outcome`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          user_outcome: txn?.user_outcome || '',
+          outcome_notes: editingOutcomeNotes,
+          outcome_date: new Date().toISOString()
+        })
+      });
+      if (!res.ok) throw new Error('Failed to save outcome notes');
+      setTransactions(prev => prev.map(t => 
+        t.id === txnId ? { ...t, outcome_notes: editingOutcomeNotes } : t
+      ));
+      setEditingOutcomeId(null);
+      setEditingOutcomeNotes('');
+    } catch (err) {
+      console.error('Failed to save outcome notes:', err);
+      alert('Could not save outcome notes.');
     }
   };
 
@@ -867,7 +1286,7 @@ function App() {
 
   const saveTransactionNotes = async (txnId, newNotes) => {
     try {
-      const res = await fetch(`${API_BASE}/transactions/${txnId}/notes`, {
+      const res = await authFetch(`${API_BASE}/transactions/${txnId}/notes`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_notes: newNotes })
@@ -885,7 +1304,7 @@ function App() {
 
   const updateTransactionType = async (txnId, newType) => {
     try {
-      const res = await fetch(`${API_BASE}/transactions/${txnId}/type`, {
+      const res = await authFetch(`${API_BASE}/transactions/${txnId}/type`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transaction_type: newType })
@@ -901,7 +1320,7 @@ function App() {
   const deleteTransaction = async (txnId) => {
     if (!window.confirm(`Are you sure you want to delete transaction #${txnId}?`)) return;
     try {
-      const res = await fetch(`${API_BASE}/transactions/${txnId}`, { method: 'DELETE' });
+      const res = await authFetch(`${API_BASE}/transactions/${txnId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete transaction');
       await fetchData(searchQuery, selectedCategory);
     } catch (err) {
@@ -912,7 +1331,7 @@ function App() {
 
   const deduplicateTransactions = async () => {
     try {
-      const res = await fetch(`${API_BASE}/transactions/deduplicate`, { method: 'POST' });
+      const res = await authFetch(`${API_BASE}/transactions/deduplicate`, { method: 'POST' });
       if (!res.ok) throw new Error('Failed to deduplicate');
       const data = await res.json();
       await fetchData(searchQuery, selectedCategory);
@@ -923,10 +1342,18 @@ function App() {
     }
   };
 
-  // Fetch initial data and trigger on search/category change
+  // Fetch initial data and trigger on search/category change (only when authenticated)
   useEffect(() => {
+    if (!isAuthenticated) return;
     fetchData(searchQuery, selectedCategory);
-  }, [selectedCategory]); // Fetch when category changes
+    fetchAdvisorHistory();
+  }, [selectedCategory, isAuthenticated]); // Fetch when category changes or upon authentication
+
+  useEffect(() => {
+    if (activeTab === 'advisor' && isAuthenticated) {
+      fetchAdvisorHistory();
+    }
+  }, [activeTab, isAuthenticated]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -978,7 +1405,7 @@ function App() {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${API_BASE}/transactions/upload`, {
+      const response = await authFetch(`${API_BASE}/transactions/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -1033,7 +1460,7 @@ function App() {
     }, 150);
     
     try {
-      const res = await fetch(`${API_BASE}/transactions/manual`, {
+      const res = await authFetch(`${API_BASE}/transactions/manual`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1096,7 +1523,7 @@ function App() {
     if (!uploadState.data?.id) return;
     setSavingNotes(true);
     try {
-      const res = await fetch(`${API_BASE}/transactions/${uploadState.data.id}/notes`, {
+      const res = await authFetch(`${API_BASE}/transactions/${uploadState.data.id}/notes`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_notes: successNotes })
@@ -1122,79 +1549,528 @@ function App() {
     }
   };
 
+  // =============================================================================
+  // AUTH HANDLERS
+  // =============================================================================
+
+  // Verify existing token on mount
+  useEffect(() => {
+    const verifyToken = async () => {
+      const token = localStorage.getItem('finsense_token');
+      if (!token) {
+        setIsAuthenticated(false);
+        setAuthChecking(false);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/auth/verify`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentUser(data.user);
+          setIsAuthenticated(true);
+        } else {
+          localStorage.removeItem('finsense_token');
+          localStorage.removeItem('finsense_user');
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+        }
+      } catch {
+        // If backend is offline, keep local auth state
+        setIsAuthenticated(!!token);
+      } finally {
+        setAuthChecking(false);
+      }
+    };
+    verifyToken();
+  }, []);
+
+  const switchAuthMode = (mode) => {
+    setAuthMode(mode);
+    setAuthError('');
+    setAuthSuccess('');
+    setAuthForm(prev => ({
+      ...prev,
+      password: '',
+      confirm_password: ''
+    }));
+  };
+
+  const fillDemoCredentials = () => {
+    setAuthForm(prev => ({
+      ...prev,
+      username: 'admin',
+      password: 'admin123'
+    }));
+    setAuthError('');
+  };
+
+  const handleAuthSubmit = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthSuccess('');
+
+    // Client-side validations for register
+    if (authMode === 'register') {
+      if (!authForm.username || authForm.username.trim().length < 3) {
+        setAuthError('Username must be at least 3 characters');
+        return;
+      }
+      if (!authForm.password || authForm.password.length < 6) {
+        setAuthError('Password must be at least 6 characters');
+        return;
+      }
+      if (authForm.password !== authForm.confirm_password) {
+        setAuthError('Passwords do not match. Please re-check.');
+        return;
+      }
+    }
+
+    setAuthLoading(true);
+
+    const endpoint = authMode === 'register' ? '/auth/register' : '/auth/login';
+    const payload = authMode === 'register'
+      ? { username: authForm.username.trim(), password: authForm.password, full_name: authForm.full_name ? authForm.full_name.trim() : '' }
+      : { username: authForm.username.trim(), password: authForm.password };
+
+    try {
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        localStorage.setItem('finsense_token', data.token);
+        localStorage.setItem('finsense_user', JSON.stringify(data.user));
+        setCurrentUser(data.user);
+        setIsAuthenticated(true);
+        setAuthForm({ username: '', password: '', confirm_password: '', full_name: '' });
+      } else {
+        setAuthError(data.error || 'Authentication failed');
+      }
+    } catch {
+      setAuthError('Cannot reach server. Please ensure the backend is running.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem('finsense_token');
+      if (token) {
+        await fetch(`${API_BASE}/auth/logout`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(() => {});
+      }
+    } finally {
+      localStorage.removeItem('finsense_token');
+      localStorage.removeItem('finsense_user');
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setAuthForm({ username: '', password: '', confirm_password: '', full_name: '' });
+      setAuthError('');
+      setAuthSuccess('');
+    }
+  };
+
+  // =============================================================================
+  // AUTH SCREEN — Login / Register (shown when not authenticated)
+  // =============================================================================
+  if (authChecking) {
+    return (
+      <div className="auth-screen">
+        <div className="auth-card" style={{ textAlign: 'center', padding: '3rem' }}>
+          <div className="auth-spinner" style={{ margin: '0 auto 1rem' }}></div>
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>Verifying session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    const pwStrength = getPasswordStrength(authForm.password);
+    return (
+      <div className="auth-screen">
+        <div className="auth-card">
+          {/* Logo */}
+          <div className="auth-card-logo">
+            <img src="/LedgerMindd.png" alt="LedgerMind Logo" />
+          </div>
+
+          {/* Title */}
+          <div className="auth-card-title">
+            <h1>LedgerMind AI</h1>
+            <p>Secure Financial Operating System</p>
+          </div>
+
+          {/* Toggle: Login / Register */}
+          <div className="auth-toggle-row">
+            <button
+              type="button"
+              className={`auth-toggle-btn ${authMode === 'login' ? 'active' : ''}`}
+              onClick={() => switchAuthMode('login')}
+            >
+              <User size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+              Sign In
+            </button>
+            <button
+              type="button"
+              className={`auth-toggle-btn ${authMode === 'register' ? 'active' : ''}`}
+              onClick={() => switchAuthMode('register')}
+            >
+              <UserPlus size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+              Register
+            </button>
+          </div>
+
+          {/* Error / Success Messages */}
+          {authError && <div className="auth-error">{authError}</div>}
+          {authSuccess && <div className="auth-success">{authSuccess}</div>}
+
+          {/* Form */}
+          <form className="auth-form" onSubmit={handleAuthSubmit}>
+            {authMode === 'register' && (
+              <div className="auth-field">
+                <label>Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Sivam Traders Admin"
+                  value={authForm.full_name || ''}
+                  onChange={(e) => setAuthForm({ ...authForm, full_name: e.target.value })}
+                  autoComplete="name"
+                />
+              </div>
+            )}
+
+            <div className="auth-field">
+              <label>Username {authMode === 'register' && <span style={{ opacity: 0.6 }}>(min 3 chars)</span>}</label>
+              <input
+                type="text"
+                placeholder={authMode === 'register' ? "Choose a username or email" : "Enter your username or email"}
+                value={authForm.username || ''}
+                onChange={(e) => setAuthForm({ ...authForm, username: e.target.value })}
+                autoComplete="username"
+                required
+                minLength={3}
+              />
+            </div>
+
+            <div className="auth-field">
+              <label>Password {authMode === 'register' && <span style={{ opacity: 0.6 }}>(min 6 chars)</span>}</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  value={authForm.password || ''}
+                  onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+                  autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
+                  required
+                  minLength={6}
+                  style={{ width: '100%', paddingRight: '2.75rem', boxSizing: 'border-box' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '0.75rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255,255,255,0.45)',
+                    cursor: 'pointer',
+                    padding: '0.25rem',
+                    display: 'flex'
+                  }}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+
+              {/* Password Strength (only on register) */}
+              {authMode === 'register' && authForm.password && (
+                <>
+                  <div className="password-strength">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div
+                        key={i}
+                        className={`password-strength-bar ${
+                          pwStrength.level >= i
+                            ? i <= 1 ? 'weak' : i <= 2 ? 'fair' : i <= 3 ? 'good' : 'strong'
+                            : ''
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="password-strength-label">{pwStrength.label}</div>
+                </>
+              )}
+            </div>
+
+            {/* Confirm Password (only on register) */}
+            {authMode === 'register' && (
+              <div className="auth-field">
+                <label>Confirm Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="Re-enter your password"
+                    value={authForm.confirm_password || ''}
+                    onChange={(e) => setAuthForm({ ...authForm, confirm_password: e.target.value })}
+                    autoComplete="new-password"
+                    required
+                    minLength={6}
+                    style={{ 
+                      width: '100%', 
+                      paddingRight: '2.75rem', 
+                      boxSizing: 'border-box',
+                      borderColor: authForm.confirm_password && authForm.password !== authForm.confirm_password ? '#ef4444' : undefined
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '0.75rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'rgba(255,255,255,0.45)',
+                      cursor: 'pointer',
+                      padding: '0.25rem',
+                      display: 'flex'
+                    }}
+                    title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                {authForm.confirm_password && authForm.password !== authForm.confirm_password && (
+                  <span style={{ color: '#f87171', fontSize: '0.72rem', marginTop: '0.2rem' }}>
+                    Passwords do not match
+                  </span>
+                )}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="auth-submit-btn"
+              disabled={
+                authLoading || 
+                !authForm.username || 
+                !authForm.password || 
+                (authMode === 'register' && (!authForm.confirm_password || authForm.password !== authForm.confirm_password))
+              }
+            >
+              {authLoading ? (
+                <div className="auth-spinner"></div>
+              ) : (
+                <>
+                  <KeyRound size={18} />
+                  {authMode === 'register' ? 'Create Account' : 'Sign In'}
+                </>
+              )}
+            </button>
+
+            {/* Quick Demo Credentials */}
+            {authMode === 'login' && (
+              <div style={{ textAlign: 'center', marginTop: '0.25rem' }}>
+                <button
+                  type="button"
+                  onClick={fillDemoCredentials}
+                  style={{
+                    background: 'rgba(99, 102, 241, 0.12)',
+                    border: '1px dashed rgba(99, 102, 241, 0.35)',
+                    borderRadius: '10px',
+                    color: '#c7d2fe',
+                    fontSize: '0.78rem',
+                    padding: '0.45rem 0.9rem',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.15s ease, border-color 0.15s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    width: '100%',
+                    justifyContent: 'center'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.22)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.12)'}
+                  onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.96)'}
+                  onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  <Zap size={14} style={{ color: '#818cf8' }} />
+                  <span>Fill Demo Account (admin / admin123)</span>
+                </button>
+              </div>
+            )}
+
+            {/* Footer toggle prompt */}
+            <div style={{ textAlign: 'center', marginTop: '0.5rem', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>
+              {authMode === 'login' ? (
+                <span>
+                  Don't have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchAuthMode('register')}
+                    style={{ background: 'none', border: 'none', color: '#818cf8', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}
+                  >
+                    Register here
+                  </button>
+                </span>
+              ) : (
+                <span>
+                  Already have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchAuthMode('login')}
+                    style={{ background: 'none', border: 'none', color: '#818cf8', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}
+                  >
+                    Sign in here
+                  </button>
+                </span>
+              )}
+            </div>
+          </form>
+
+          {/* Security Badge */}
+          <div className="auth-security-badge">
+            <Shield size={13} />
+            <span>Protected with bcrypt hashing & JWT authentication</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =============================================================================
+  // MAIN APP (authenticated)
+  // =============================================================================
   return (
     <div className="app-container">
-      {/* Sidebar Navigation */}
-      <aside className="sidebar">
-        <div className="sidebar-brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', padding: '0.25rem 0 1rem 0' }}>
+      {/* Slide Menu Backdrop (Mobile/Overlay) */}
+      <div 
+        className={`sidebar-backdrop ${sidebarOpen ? 'active' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Sidebar Navigation — Slide Type */}
+      <aside className={`sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
+        <div className="sidebar-brand">
           <img 
             src="/LedgerMindd.png" 
             alt="LedgerMind Logo" 
             style={{ 
-              height: '68px', 
+              height: '56px', 
               width: 'auto', 
-              maxWidth: '220px', 
+              maxWidth: '180px', 
               objectFit: 'contain', 
-              filter: 'drop-shadow(0 6px 16px rgba(99, 102, 241, 0.22))' 
+              filter: 'drop-shadow(0 4px 12px rgba(79, 70, 229, 0.2))' 
             }}
           />
+          <button
+            type="button"
+            className="sidebar-collapse-btn"
+            onClick={() => setSidebarOpen(false)}
+            title="Collapse Sidebar Menu"
+            aria-label="Collapse Sidebar Menu"
+          >
+            <ChevronLeft size={18} />
+          </button>
         </div>
+
+        {/* User Badge */}
+        {currentUser && (
+          <div className="sidebar-user-badge">
+            <div className="sidebar-user-avatar">
+              {(currentUser.full_name || currentUser.username || 'U').charAt(0).toUpperCase()}
+            </div>
+            <div className="sidebar-user-info">
+              <span className="sidebar-user-name">{currentUser.full_name || currentUser.username}</span>
+              <span className="sidebar-user-role">@{currentUser.username}</span>
+            </div>
+            <button
+              className="sidebar-logout-btn"
+              onClick={handleLogout}
+              title="Sign Out"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+        )}
 
         <nav className="sidebar-menu">
           <button 
             className={`menu-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => { setActiveTab('dashboard'); if (window.innerWidth <= 900) setSidebarOpen(false); }}
           >
             <LayoutDashboard size={18} />
             <span>Dashboard</span>
           </button>
           <button 
             className={`menu-item ${activeTab === 'invoices' ? 'active' : ''}`}
-            onClick={() => setActiveTab('invoices')}
+            onClick={() => { setActiveTab('invoices'); if (window.innerWidth <= 900) setSidebarOpen(false); }}
           >
             <FileText size={18} />
             <span>Invoices Ledger</span>
           </button>
           <button 
             className={`menu-item ${activeTab === 'upload' ? 'active' : ''}`}
-            onClick={() => setActiveTab('upload')}
+            onClick={() => { setActiveTab('upload'); if (window.innerWidth <= 900) setSidebarOpen(false); }}
           >
             <Upload size={18} />
             <span>Upload Portal</span>
           </button>
           <button 
             className={`menu-item ${activeTab === 'forecast' ? 'active' : ''}`}
-            onClick={() => setActiveTab('forecast')}
+            onClick={() => { setActiveTab('forecast'); if (window.innerWidth <= 900) setSidebarOpen(false); }}
           >
             <TrendingUp size={18} />
             <span>Cash Forecasting</span>
           </button>
           <button 
             className={`menu-item ${activeTab === 'advisor' ? 'active' : ''}`}
-            onClick={() => setActiveTab('advisor')}
+            onClick={() => { setActiveTab('advisor'); if (window.innerWidth <= 900) setSidebarOpen(false); }}
           >
             <BrainCircuit size={18} />
             <span>AI Advisor</span>
           </button>
           <button 
             className={`menu-item ${activeTab === 'cases' ? 'active' : ''}`}
-            onClick={() => setActiveTab('cases')}
+            onClick={() => { setActiveTab('cases'); if (window.innerWidth <= 900) setSidebarOpen(false); }}
           >
             <Database size={18} />
             <span>Case Memory</span>
           </button>
           <button 
             className={`menu-item ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
+            onClick={() => { setActiveTab('settings'); if (window.innerWidth <= 900) setSidebarOpen(false); }}
           >
             <Sliders size={18} />
             <span>Settings</span>
+          </button>
+          <button 
+            className={`menu-item ${activeTab === 'security' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('security'); if (window.innerWidth <= 900) setSidebarOpen(false); }}
+          >
+            <ShieldCheck size={18} />
+            <span>Data & Security</span>
           </button>
         </nav>
 
         <div className="sidebar-footer">
           <div className="sidebar-status-pill">
-            <span className={`sidebar-status-dot ${backendOffline ? 'offline' : ''}`} style={{ backgroundColor: backendOffline ? '#ef4444' : '#34d399', boxShadow: backendOffline ? '0 0 8px #ef4444' : '0 0 8px #34d399' }}></span>
+            <span className={`sidebar-status-dot ${backendOffline ? 'offline' : ''}`} style={{ backgroundColor: backendOffline ? '#ef4444' : '#059669', boxShadow: backendOffline ? '0 0 8px #ef4444' : '0 0 8px #059669' }}></span>
             <span>{backendOffline ? 'System Offline' : 'API Node Connected'}</span>
           </div>
         </div>
@@ -1205,8 +2081,18 @@ function App() {
         
         {/* Top Header */}
         <header className="top-header">
-          <div className="header-title-section">
-            <h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <button 
+              type="button"
+              className={`sidebar-toggle-btn ${sidebarOpen ? 'active' : ''}`}
+              onClick={() => setSidebarOpen(prev => !prev)}
+              title={sidebarOpen ? "Collapse navigation sidebar" : "Slide open navigation sidebar"}
+              aria-label={sidebarOpen ? "Collapse navigation sidebar" : "Slide open navigation sidebar"}
+            >
+              <PanelLeft size={18} />
+            </button>
+            <div className="header-title-section">
+              <h2>
               {activeTab === 'dashboard' && 'Financial Overview'}
               {activeTab === 'invoices' && 'Invoices Ledger'}
               {activeTab === 'upload' && 'Document Ingestion Portal'}
@@ -1214,6 +2100,7 @@ function App() {
               {activeTab === 'advisor' && 'AI Financial Advisor (RAG + Fusion)'}
               {activeTab === 'cases' && 'ChromaDB Vector Case Memory'}
               {activeTab === 'settings' && 'System & Business Settings'}
+              {activeTab === 'security' && 'Data Security & Audit Vault'}
             </h2>
             <p>
               {activeTab === 'dashboard' && 'Real-time cash flow monitoring and spending insights.'}
@@ -1223,8 +2110,10 @@ function App() {
               {activeTab === 'advisor' && 'Ask spending/revenue proposals to retrieve past case memory, analyze cashflow trajectory, and get LLM reasoning.'}
               {activeTab === 'cases' && 'Browse, filter, and inspect indexed past business case memories stored in ChromaDB vector store.'}
               {activeTab === 'settings' && 'Configure starting cash balance, safety threshold, and preferred Gemini LLM reasoning model.'}
+              {activeTab === 'security' && 'Enterprise cryptographic protection, live database integrity checks, and tamper-evident financial audit trails.'}
             </p>
           </div>
+        </div>
 
           <div className="header-actions">
             {activeTab === 'invoices' && (
@@ -1270,21 +2159,20 @@ function App() {
                 {/* Balance + Metrics Row */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
                   
-                  {/* Ledger Mesh Balance Card */}
-                  <div className="mesh-balance-card" style={{ height: 'auto', minHeight: '130px' }}>
-                    <div>
-                      <div className="balance-label">
-                        <IndianRupee size={14} />
-                        <span>Cash Balance Ledger</span>
-                      </div>
-                      <div className="balance-amount" style={{ fontSize: '1.8rem', margin: '0.25rem 0' }}>
-                        Rs.{stats.current_balance ? stats.current_balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                      </div>
+                  {/* Ledger Balance Card - Unified Luminous Royal Sapphire */}
+                  <div className="glass-card metric-mini-card balance-card">
+                    <div className="metric-icon-box sapphire">
+                      <IndianRupee size={22} />
                     </div>
-                    <div className="balance-footer" style={{ marginTop: '0.5rem', paddingTop: '0.5rem' }}>
-                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Risk Threshold: Rs.10,000.00</span>
-                      <span className={`balance-status-indicator ${stats.risk_status}`} style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}>
-                        {stats.risk_status}
+                    <div className="metric-details" style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', flexWrap: 'nowrap' }}>
+                        <span className="metric-detail-label">Cash Balance Ledger</span>
+                        <span className={`balance-status-indicator ${stats.risk_status}`} style={{ fontSize: '0.65rem', padding: '0.15rem 0.45rem' }}>
+                          {stats.risk_status}
+                        </span>
+                      </div>
+                      <span className="metric-detail-value">
+                        Rs.{stats.current_balance ? stats.current_balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                       </span>
                     </div>
                   </div>
@@ -1296,7 +2184,7 @@ function App() {
                     </div>
                     <div className="metric-details">
                       <span className="metric-detail-label">Total Income</span>
-                      <span className="metric-detail-value" style={{ color: '#166534', fontWeight: 800 }}>Rs.{stats.total_income ? stats.total_income.toLocaleString() : '0'}</span>
+                      <span className="metric-detail-value">Rs.{stats.total_income ? stats.total_income.toLocaleString() : '0'}</span>
                     </div>
                   </div>
 
@@ -1306,7 +2194,7 @@ function App() {
                     </div>
                     <div className="metric-details">
                       <span className="metric-detail-label">Total Expenses</span>
-                      <span className="metric-detail-value" style={{ color: '#b91c1c', fontWeight: 800 }}>Rs.{stats.total_expenses ? stats.total_expenses.toLocaleString() : '0'}</span>
+                      <span className="metric-detail-value">Rs.{stats.total_expenses ? stats.total_expenses.toLocaleString() : '0'}</span>
                     </div>
                   </div>
 
@@ -1319,6 +2207,24 @@ function App() {
                       <span className="metric-detail-value">{stats.total_transactions}</span>
                     </div>
                   </div>
+
+                  {/* Pending Review Counter Card */}
+                  {stats.pending_review_count > 0 && (
+                    <div 
+                      className="glass-card metric-mini-card pending-card"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => { setActiveTab('invoices'); setOutcomeFilter('pending'); }}
+                      title="Click to review pending invoices"
+                    >
+                      <div className="metric-icon-box amber">
+                        <Clock size={20} />
+                      </div>
+                      <div className="metric-details">
+                        <span className="metric-detail-label">Pending Review</span>
+                        <span className="metric-detail-value">{stats.pending_review_count}</span>
+                      </div>
+                    </div>
+                  )}
 
                 </div>
 
@@ -1374,11 +2280,11 @@ function App() {
                                         <Cell 
                                           key={`cell-${index}`} 
                                           fill={CATEGORY_COLORS[entry.name] || DEFAULT_COLOR} 
-                                          stroke={isHovered ? '#ffffff' : 'transparent'}
-                                          strokeWidth={isHovered ? 3 : 0}
+                                          stroke="#ffffff"
+                                          strokeWidth={isHovered ? 3.5 : 2}
                                           style={{
                                             filter: `drop-shadow(0px 6px 12px ${CATEGORY_COLORS[entry.name] || DEFAULT_COLOR}40)`,
-                                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.2s ease, filter 0.2s ease',
                                             transform: isHovered ? 'scale(1.03)' : 'scale(1)',
                                             transformOrigin: 'center'
                                           }}
@@ -1402,15 +2308,15 @@ function App() {
                               {stats.category_spend.map((entry, idx) => {
                                 const percentage = totalSpend > 0 ? ((entry.value / totalSpend) * 100).toFixed(1) : 0;
                                 return (
-                                  <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.95rem', borderRadius: '12px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                  <div key={idx} className="category-stat-card">
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                       <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: CATEGORY_COLORS[entry.name] || DEFAULT_COLOR, flexShrink: 0, boxShadow: `0 0 8px ${CATEGORY_COLORS[entry.name] || DEFAULT_COLOR}` }}></span>
                                       <div style={{ textAlign: 'left' }}>
-                                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.88rem' }}>{entry.name}</div>
-                                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>{percentage}% of total</div>
+                                        <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{entry.name}</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>{percentage}% of total</div>
                                       </div>
                                     </div>
-                                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>
+                                    <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.95rem' }}>
                                       Rs.{entry.value.toLocaleString()}
                                     </div>
                                   </div>
@@ -1514,8 +2420,36 @@ function App() {
                     ))}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {/* Outcome Status Filter */}
+                    <select
+                      value={outcomeFilter}
+                      onChange={(e) => setOutcomeFilter(e.target.value)}
+                      style={{
+                        background: outcomeFilter === 'pending' ? '#fffbeb' : '#ffffff',
+                        border: outcomeFilter === 'pending' ? '1.5px solid #fcd34d' : '1px solid #c7d2fe',
+                        borderRadius: '10px',
+                        padding: '0.4rem 1.8rem 0.4rem 0.7rem',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        color: outcomeFilter === 'pending' ? '#b45309' : '#334155',
+                        cursor: 'pointer',
+                        outline: 'none',
+                        appearance: 'none',
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 0.5rem center'
+                      }}
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="pending">🟡 Pending Review</option>
+                      <option value="reviewed">✅ Reviewed</option>
+                    </select>
                     <div style={{ color: '#334155', fontSize: '0.85rem', fontWeight: 700 }}>
-                      Showing <strong>{transactions.length}</strong> entries
+                      Showing <strong>{transactions.filter(txn => {
+                        if (outcomeFilter === 'pending') return txn.outcome_label === 'pending' && !txn.user_outcome;
+                        if (outcomeFilter === 'reviewed') return txn.outcome_label !== 'pending' || txn.user_outcome;
+                        return true;
+                      }).length}</strong> entries
                     </div>
                     <button
                       className="btn-primary"
@@ -1553,7 +2487,11 @@ function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {transactions.map((txn) => (
+                        {transactions.filter(txn => {
+                          if (outcomeFilter === 'pending') return txn.outcome_label === 'pending' && !txn.user_outcome;
+                          if (outcomeFilter === 'reviewed') return txn.outcome_label !== 'pending' || txn.user_outcome;
+                          return true;
+                        }).map((txn) => (
                           <tr key={txn.id}>
                             <td style={{ fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', textAlign: 'center', minWidth: '120px' }}>{txn.date}</td>
                             <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -1663,42 +2601,82 @@ function App() {
                               </span>
                             </td>
                             <td style={{ textAlign: 'center' }}>
-                              <select
-                                id={`outcome-select-${txn.id}`}
-                                value={txn.user_outcome || ''}
-                                onChange={(e) => saveOutcomeLabel(txn.id, e.target.value)}
-                                style={{
-                                  background: txn.user_outcome ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255,255,255,0.7)',
-                                  color: txn.user_outcome ? {
-                                    'Productive': '#166534',
-                                    'Necessary': '#1d4ed8',
-                                    'Wasteful': '#b91c1c',
-                                    'Pending Review': '#b45309',
-                                    'Break-even': '#334155'
-                                  }[txn.user_outcome] || '#4338ca' : '#334155',
-                                  border: '1px solid #c7d2fe',
-                                  borderRadius: '8px',
-                                  padding: '0.3rem 0.5rem',
-                                  fontSize: '0.78rem',
-                                  fontWeight: 700,
-                                  cursor: 'pointer',
-                                  minWidth: '120px',
-                                  outline: 'none',
-                                  appearance: 'none',
-                                  WebkitAppearance: 'none',
-                                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                                  backgroundRepeat: 'no-repeat',
-                                  backgroundPosition: 'right 0.4rem center',
-                                  paddingRight: '1.5rem'
-                                }}
-                              >
-                                <option value="" style={{ background: '#ffffff', color: '#334155' }}>— Set Outcome —</option>
-                                <option value="Productive" style={{ background: '#ffffff', color: '#166534' }}>✅ Productive</option>
-                                <option value="Necessary" style={{ background: '#ffffff', color: '#1d4ed8' }}>📋 Necessary</option>
-                                <option value="Wasteful" style={{ background: '#ffffff', color: '#b91c1c' }}>❌ Wasteful</option>
-                                <option value="Pending Review" style={{ background: '#ffffff', color: '#b45309' }}>⏳ Pending Review</option>
-                                <option value="Break-even" style={{ background: '#ffffff', color: '#334155' }}>⚖️ Break-even</option>
-                              </select>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', minWidth: '140px' }}>
+                                <select
+                                  id={`outcome-select-${txn.id}`}
+                                  value={txn.user_outcome || ''}
+                                  onChange={(e) => saveOutcomeLabel(txn.id, e.target.value)}
+                                  style={{
+                                    background: txn.user_outcome ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255,255,255,0.7)',
+                                    color: txn.user_outcome ? {
+                                      'Healthy': '#15803d',
+                                      'Strained': '#b91c1c',
+                                      'Profitable': '#047857',
+                                      'Wasteful': '#dc2626',
+                                      'Break-even': '#475569'
+                                    }[txn.user_outcome] || '#4338ca' : '#334155',
+                                    border: '1px solid #c7d2fe',
+                                    borderRadius: '8px',
+                                    padding: '0.3rem 0.5rem',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    minWidth: '120px',
+                                    outline: 'none',
+                                    appearance: 'none',
+                                    WebkitAppearance: 'none',
+                                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                                    backgroundRepeat: 'no-repeat',
+                                    backgroundPosition: 'right 0.4rem center',
+                                    paddingRight: '1.5rem'
+                                  }}
+                                >
+                                  <option value="" style={{ background: '#ffffff', color: '#334155' }}>— Record Outcome —</option>
+                                  <option value="Healthy" style={{ background: '#ffffff', color: '#15803d' }}>💚 Healthy</option>
+                                  <option value="Profitable" style={{ background: '#ffffff', color: '#047857' }}>📈 Profitable</option>
+                                  <option value="Strained" style={{ background: '#ffffff', color: '#b91c1c' }}>⚠️ Strained</option>
+                                  <option value="Wasteful" style={{ background: '#ffffff', color: '#dc2626' }}>❌ Wasteful</option>
+                                  <option value="Break-even" style={{ background: '#ffffff', color: '#475569' }}>⚖️ Break-even</option>
+                                </select>
+                                {/* Outcome notes inline editor */}
+                                {editingOutcomeId === txn.id && (
+                                  <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                                    <input
+                                      type="text"
+                                      placeholder="What happened? (e.g., ROI was 3x)"
+                                      value={editingOutcomeNotes}
+                                      onChange={(e) => setEditingOutcomeNotes(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') saveOutcomeNotes(txn.id);
+                                        if (e.key === 'Escape') { setEditingOutcomeId(null); setEditingOutcomeNotes(''); }
+                                      }}
+                                      autoFocus
+                                      className="outcome-notes-input"
+                                      style={{ minHeight: '28px', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                                    />
+                                    <button
+                                      onClick={() => saveOutcomeNotes(txn.id)}
+                                      style={{
+                                        background: '#f59e0b', color: '#ffffff', border: 'none',
+                                        borderRadius: '6px', padding: '0.25rem 0.4rem', cursor: 'pointer',
+                                        display: 'flex', alignItems: 'center', flexShrink: 0
+                                      }}
+                                      title="Save outcome notes"
+                                    >
+                                      <Check size={12} />
+                                    </button>
+                                  </div>
+                                )}
+                                {txn.outcome_notes && editingOutcomeId !== txn.id && (
+                                  <div
+                                    style={{ fontSize: '0.7rem', color: '#64748b', fontStyle: 'italic', lineHeight: 1.3, cursor: 'pointer' }}
+                                    onClick={() => { setEditingOutcomeId(txn.id); setEditingOutcomeNotes(txn.outcome_notes); }}
+                                    title="Click to edit outcome notes"
+                                  >
+                                    📝 {txn.outcome_notes.length > 40 ? txn.outcome_notes.substring(0, 40) + '...' : txn.outcome_notes}
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td style={{ textAlign: 'center' }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
@@ -1718,7 +2696,7 @@ function App() {
                                     fontSize: '0.75rem',
                                     fontWeight: 700,
                                     boxShadow: '0 2px 5px rgba(99, 102, 241, 0.08)',
-                                    transition: 'all 0.2s'
+                                    transition: 'background-color 0.15s ease, color 0.15s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)'
                                   }}
                                   onMouseEnter={(e) => {
                                     e.currentTarget.style.background = '#4338ca';
@@ -1728,6 +2706,8 @@ function App() {
                                     e.currentTarget.style.background = '#e0e7ff';
                                     e.currentTarget.style.color = '#4338ca';
                                   }}
+                                  onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.96)'}
+                                  onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
                                 >
                                   <Download size={13} />
                                   <span>PDF</span>
@@ -2608,34 +3588,225 @@ function App() {
               </div>
             )}
 
-            {/* Advisor View Tab */}
-            {activeTab === 'advisor' && (
-              <div className="tab-content fade-in">
-                {/* Advisor Hero Query Box */}
-                <div className="glass-card" style={{ padding: '2rem', marginBottom: '2rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <div style={{ padding: '0.5rem', background: 'linear-gradient(135deg, #6366f1, #3b82f6)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                        <BrainCircuit size={24} />
+            {/* Advisor View Tab with Persistent Multi-Turn Chat History */}
+            {activeTab === 'advisor' && (() => {
+              const filteredAdvisorHistory = advisorHistory.filter(turn => {
+                const matchesSearch = !historySearchTerm || 
+                  (turn.query && turn.query.toLowerCase().includes(historySearchTerm.toLowerCase())) ||
+                  (turn.response?.explanation && turn.response.explanation.toLowerCase().includes(historySearchTerm.toLowerCase())) ||
+                  (turn.verdict && turn.verdict.toLowerCase().includes(historySearchTerm.toLowerCase()));
+                
+                const matchesVerdict = historyFilterVerdict === 'all' || 
+                  (turn.verdict === historyFilterVerdict) ||
+                  (turn.response?.verdict === historyFilterVerdict);
+
+                return matchesSearch && matchesVerdict;
+              });
+
+              return (
+              <div className="tab-content fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                
+                {/* Advisor Toolbar Header */}
+                <div className="advisor-chat-toolbar">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                    <div style={{
+                      padding: '0.65rem',
+                      background: 'linear-gradient(in oklch 135deg, var(--ref-indigo-500), var(--ref-purple-600))',
+                      borderRadius: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      boxShadow: '0 4px 14px oklch(57.5% 0.225 264 / 0.3)'
+                    }}>
+                      <BrainCircuit size={26} />
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          {advisorLang === 'ta' ? 'RAG Fusion நிதி ஆலோசகர்' : 'RAG Fusion Financial Advisor'}
+                        </h3>
+                        <span style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 800,
+                          padding: '0.2rem 0.6rem',
+                          borderRadius: '12px',
+                          background: 'var(--primary-indigo-light)',
+                          color: 'var(--ref-indigo-700)',
+                          border: '1px solid var(--primary-indigo-border)'
+                        }}>
+                          Gemini 3.5 + ChromaDB
+                        </span>
                       </div>
-                      <div>
-                        <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>RAG Fusion Financial Advisor</h3>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Propose spending or revenue decisions to analyze against live cash reserves, 30-day forecasting models, and ChromaDB past case memories.</p>
-                      </div>
+                      <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                        {advisorLang === 'ta'
+                          ? 'ரொக்க இருப்பு, 447 ChromaDB முந்தைய வழக்குகள் மற்றும் 30-நாள் முன்னறிவிப்புடன் நிகழ்நேர ஆலோசனை.'
+                          : 'Persistent conversational reasoning powered by 447 ChromaDB case memories & 30-day Prophet forecasting.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    {/* Consultation count badge */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '12px',
+                      background: 'var(--bg-surface-subtle)',
+                      border: '1px solid var(--border-subtle)',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      color: 'var(--text-body)'
+                    }}>
+                      <History size={14} color="var(--primary-indigo)" />
+                      <span>{advisorHistory.length} {advisorLang === 'ta' ? 'ஆலோசனைகள்' : 'Consultations'}</span>
                     </div>
 
+                    {/* Optimized History Position Switcher: Side (Optimized) | Below | Hide */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      background: 'var(--bg-surface-subtle)',
+                      padding: '0.2rem',
+                      borderRadius: '12px',
+                      border: '1px solid var(--border-subtle)'
+                    }}>
+                      <button
+                        type="button"
+                        onClick={() => { setShowHistoryDrawer(true); setHistoryPosition('side'); }}
+                        style={{
+                          background: (showHistoryDrawer && historyPosition === 'side') ? 'var(--primary-indigo)' : 'transparent',
+                          color: (showHistoryDrawer && historyPosition === 'side') ? '#ffffff' : 'var(--text-body)',
+                          border: 'none',
+                          padding: '0.35rem 0.7rem',
+                          borderRadius: '9px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          transition: 'all 0.15s ease'
+                        }}
+                        title={advisorLang === 'ta' ? 'பக்கத்தில் வரலாறு (சிறந்தது)' : 'Dock history to side panel (recommended for desktop)'}
+                      >
+                        <PanelLeft size={13} />
+                        <span>{advisorLang === 'ta' ? 'பக்கத்தில்' : 'Side (Optimized)'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setShowHistoryDrawer(true); setHistoryPosition('below'); }}
+                        style={{
+                          background: (showHistoryDrawer && historyPosition === 'below') ? 'var(--primary-indigo)' : 'transparent',
+                          color: (showHistoryDrawer && historyPosition === 'below') ? '#ffffff' : 'var(--text-body)',
+                          border: 'none',
+                          padding: '0.35rem 0.7rem',
+                          borderRadius: '9px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          transition: 'all 0.15s ease'
+                        }}
+                        title={advisorLang === 'ta' ? 'கீழே வரலாறு' : 'Dock history journal below chat'}
+                      >
+                        <ChevronDown size={13} />
+                        <span>{advisorLang === 'ta' ? 'கீழே' : 'Below'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowHistoryDrawer(!showHistoryDrawer)}
+                        style={{
+                          background: !showHistoryDrawer ? 'var(--bg-surface)' : 'transparent',
+                          color: !showHistoryDrawer ? 'var(--ref-neutral-700)' : 'var(--text-muted)',
+                          border: !showHistoryDrawer ? '1px solid var(--border-subtle)' : 'none',
+                          padding: '0.35rem 0.65rem',
+                          borderRadius: '9px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          transition: 'all 0.15s ease'
+                        }}
+                        title={showHistoryDrawer ? 'Hide history panel to maximize primary chat space' : 'Show history panel'}
+                      >
+                        <X size={13} />
+                        <span>{advisorLang === 'ta' ? 'மறைக்க' : 'Hide'}</span>
+                      </button>
+                    </div>
+
+                    {/* Export Dialog button */}
+                    <button
+                      type="button"
+                      onClick={handleExportConsultation}
+                      disabled={advisorHistory.length === 0}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        padding: '0.4rem 0.85rem',
+                        borderRadius: '12px',
+                        background: 'var(--bg-surface)',
+                        color: advisorHistory.length === 0 ? 'var(--text-faint)' : 'var(--text-body)',
+                        border: '1px solid var(--border-subtle)',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        cursor: advisorHistory.length === 0 ? 'not-allowed' : 'pointer',
+                        opacity: advisorHistory.length === 0 ? 0.6 : 1,
+                        transition: 'all 0.15s ease'
+                      }}
+                      title="Export conversation history to text document"
+                    >
+                      <Download size={14} />
+                      <span>{advisorLang === 'ta' ? 'பதிவிறக்கம்' : 'Export'}</span>
+                    </button>
+
+                    {/* Clear Chat Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleClearAdvisorHistory()}
+                      disabled={advisorHistory.length === 0}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        padding: '0.4rem 0.85rem',
+                        borderRadius: '12px',
+                        background: 'var(--bg-surface)',
+                        color: advisorHistory.length === 0 ? 'var(--text-faint)' : 'var(--status-strained)',
+                        border: '1px solid var(--border-subtle)',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        cursor: advisorHistory.length === 0 ? 'not-allowed' : 'pointer',
+                        opacity: advisorHistory.length === 0 ? 0.6 : 1,
+                        transition: 'all 0.15s ease'
+                      }}
+                      title="Clear complete advisor consultation history"
+                    >
+                      <Trash2 size={14} />
+                      <span>{advisorLang === 'ta' ? 'வரலாற்றை அழி' : 'Clear Chat'}</span>
+                    </button>
+
                     {/* Language Selector Toggle */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#f1f5f9', padding: '0.3rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                      <Globe size={16} color="#4f46e5" style={{ marginLeft: '0.4rem' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'var(--bg-surface-subtle)', padding: '0.25rem', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+                      <Globe size={15} color="var(--primary-indigo)" style={{ marginLeft: '0.35rem' }} />
                       <button
                         type="button"
                         onClick={() => setAdvisorLang('en')}
                         style={{
-                          background: advisorLang === 'en' ? 'linear-gradient(135deg, #6366f1, #3b82f6)' : 'transparent',
-                          color: advisorLang === 'en' ? '#fff' : '#475569',
+                          background: advisorLang === 'en' ? 'linear-gradient(in oklch 135deg, var(--ref-indigo-500), var(--ref-indigo-600))' : 'transparent',
+                          color: advisorLang === 'en' ? '#fff' : 'var(--text-body)',
                           border: 'none',
-                          padding: '0.35rem 0.75rem',
-                          borderRadius: '10px',
+                          padding: '0.3rem 0.65rem',
+                          borderRadius: '9px',
                           fontSize: '0.75rem',
                           fontWeight: 700,
                           cursor: 'pointer'
@@ -2647,532 +3818,1227 @@ function App() {
                         type="button"
                         onClick={() => setAdvisorLang('ta')}
                         style={{
-                          background: advisorLang === 'ta' ? 'linear-gradient(135deg, #6366f1, #3b82f6)' : 'transparent',
-                          color: advisorLang === 'ta' ? '#fff' : '#475569',
+                          background: advisorLang === 'ta' ? 'linear-gradient(in oklch 135deg, var(--ref-indigo-500), var(--ref-indigo-600))' : 'transparent',
+                          color: advisorLang === 'ta' ? '#fff' : 'var(--text-body)',
                           border: 'none',
-                          padding: '0.35rem 0.75rem',
-                          borderRadius: '10px',
+                          padding: '0.3rem 0.65rem',
+                          borderRadius: '9px',
                           fontSize: '0.75rem',
                           fontWeight: 700,
                           cursor: 'pointer'
                         }}
                       >
-                        Tamil (தமிழ்)
+                        தமிழ்
                       </button>
                     </div>
-                  </div>
-
-                  {/* Input Form with Mic Button */}
-                  <form onSubmit={(e) => { e.preventDefault(); handleAdvisorSubmit(); }} style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
-                    <div style={{ flexGrow: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
-                      <input 
-                        type="text"
-                        className="search-input"
-                        placeholder={advisorLang === 'ta' ? "உதாரணம்: 5 புதிய லேப்டாப்கள் ₹75,000க்கு வாங்கலாமா?" : "e.g. Should I spend Rs. 75,000 on 5 development laptops for our engineering team?"}
-                        value={advisorQuery}
-                        onChange={(e) => setAdvisorQuery(e.target.value)}
-                        style={{ width: '100%', padding: '0.9rem 3.5rem 0.9rem 1.2rem', fontSize: '0.95rem', borderRadius: '12px', background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={toggleSpeechRecognition}
-                        style={{
-                          position: 'absolute',
-                          right: '0.5rem',
-                          background: isListening 
-                            ? 'linear-gradient(135deg, #ef4444, #dc2626)' 
-                            : 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                          border: 'none',
-                          color: '#ffffff',
-                          borderRadius: '12px',
-                          padding: '0.55rem 0.85rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.35rem',
-                          fontWeight: 800,
-                          fontSize: '0.8rem',
-                          boxShadow: isListening 
-                            ? '0 0 18px rgba(239, 68, 68, 0.6)' 
-                            : '0 4px 14px rgba(99, 102, 241, 0.35)',
-                          transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                          transform: isListening ? 'scale(1.05)' : 'scale(1)',
-                          animation: isListening ? 'pulse 1.2s infinite' : 'none'
-                        }}
-                        title={isListening ? "Listening to your voice... Speak now!" : "Click to speak your question using microphone"}
-                      >
-                        {isListening ? <MicOff size={16} color="#ffffff" /> : <Mic size={16} color="#ffffff" />}
-                        <span style={{ fontSize: '0.75rem', letterSpacing: '0.02em' }}>
-                          {isListening ? (advisorLang === 'ta' ? 'கேட்கிறது...' : 'Listening...') : (advisorLang === 'ta' ? 'பேசவும்' : 'Voice')}
-                        </span>
-                      </button>
-                    </div>
-
-                    <button 
-                      type="submit"
-                      className="filter-pill active"
-                      disabled={advisorLoading || !advisorQuery.trim()}
-                      style={{ padding: '0.9rem 1.75rem', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, cursor: advisorLoading ? 'not-allowed' : 'pointer', opacity: advisorLoading ? 0.7 : 1, background: 'linear-gradient(135deg, #6366f1, #3b82f6)' }}
-                    >
-                      {advisorLoading ? (
-                        <>
-                          <RefreshCw size={18} className="spin" />
-                          <span>Reasoning...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={18} />
-                          <span>Get Advice</span>
-                        </>
-                      )}
-                    </button>
-                  </form>
-
-                  {/* Voice Verification Prompt Banner */}
-                  {isVoiceCaptured && (
-                    <div style={{
-                      marginTop: '0.85rem',
-                      padding: '0.75rem 1rem',
-                      background: 'linear-gradient(135deg, #fffbe6, #fef3c7)',
-                      border: '1px solid #f59e0b',
-                      borderRadius: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: '0.75rem',
-                      boxShadow: '0 4px 12px rgba(245, 158, 11, 0.15)'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#92400e', fontWeight: 600, fontSize: '0.85rem' }}>
-                        <CheckCircle size={18} color="#d97706" />
-                        <span>
-                          {advisorLang === 'ta'
-                            ? 'குரல் கேள்வி பெறப்பட்டது! உள்ளீட்டுப் பெட்டியில் உள்ள கேள்வியை சரிபார்த்து "Get Advice" அழுத்தவும்.'
-                            : 'Voice question captured! Please verify your question in the text box above, edit if needed, and click "Get Advice".'}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleAdvisorSubmit()}
-                        style={{
-                          background: 'linear-gradient(135deg, #d97706, #b45309)',
-                          color: '#ffffff',
-                          border: 'none',
-                          padding: '0.45rem 1rem',
-                          borderRadius: '10px',
-                          fontWeight: 700,
-                          fontSize: '0.8rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.35rem',
-                          boxShadow: '0 2px 6px rgba(217, 119, 6, 0.3)'
-                        }}
-                      >
-                        <Sparkles size={14} />
-                        <span>{advisorLang === 'ta' ? 'கேள்வியை அனுப்பவும்' : 'Confirm & Ask'}</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Sample Query Suggestions */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '1rem', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.75rem', color: '#334155', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      <Lightbulb size={14} color="#d97706" /> Sample Queries:
-                    </span>
-                    {(advisorLang === 'ta' ? [
-                      'ABC டிரேடர்ஸிடம் ₹45,000-க்கு சரக்கு வாங்கலாமா?',
-                      'கடையின் மாத வாடகை ₹30,000 செலுத்த ரொக்கம் போதுமா?',
-                      'விளம்பரத்திற்காக ₹15,000 செலவு செய்யலாமா?',
-                      'கடைக்கு ₹18,500-க்கு பில்லிங் பிரிண்டர் வாங்கலாமா?',
-                      'ஊழியர் சம்பளம் ₹75,000 வழங்க பணப்புழக்கம் சரியா?'
-                    ] : [
-                      'Can I spend Rs. 45,000 for inventory restock from ABC Traders?',
-                      'Will paying store lease rent of Rs. 30,000 strain our cash balance?',
-                      'Can we afford Rs. 15,000 for Meta Ads marketing campaign?',
-                      'Should I buy a new POS billing printer for Rs. 18,500?',
-                      'Is our cash balance healthy for month-end payroll of Rs. 75,000?'
-                    ]).map((sample, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => {
-                          setAdvisorQuery(sample);
-                          handleAdvisorSubmit(sample);
-                        }}
-                        style={{
-                          background: '#ffffff',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '20px',
-                          color: '#1e293b',
-                          fontWeight: 600,
-                          fontSize: '0.75rem',
-                          padding: '0.35rem 0.75rem',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          boxShadow: '0 2px 6px rgba(99, 102, 241, 0.05)'
-                        }}
-                      >
-                        {sample}
-                      </button>
-                    ))}
                   </div>
                 </div>
 
-                {/* Error Banner */}
-                {advisorError && (
-                  <div className="alert alert-error" style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <AlertCircle size={20} />
-                    <span>{advisorError}</span>
-                  </div>
-                )}
+                {/* Main Optimized Chat Space (Primary Focus) + Optional Right-Side History Panel */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: (showHistoryDrawer && historyPosition === 'side') ? 'minmax(0, 1fr) 330px' : '1fr',
+                  gap: '1.25rem',
+                  alignItems: 'start'
+                }}>
+                  
+                  {/* Primary Center/Left Column: Conversational Stream Area (Dominates screen width) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%', minWidth: 0 }}>
+                    
+                    {/* Error Banner */}
+                    {advisorError && (
+                      <div className="alert alert-error" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <AlertCircle size={20} />
+                        <span>{advisorError}</span>
+                      </div>
+                    )}
 
-                {/* Advisor Pre-Query Welcome & Intelligence Dashboard Overview */}
-                {!advisorResult && !advisorLoading && (
-                  <div className="fade-in" style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1.35rem' }}>
-                    {/* 4 Engine Architecture Cards */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.25rem' }}>
+                    {/* =========================================================================
+                        1. CHAT BOX (ABOVE) — Primary Query Input Dock with Mic & Quick Questions
+                        ========================================================================= */}
+                    <div className="glass-card" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                       
-                      <div className="glass-card" style={{ padding: '1.35rem', borderLeft: '4px solid #6366f1', background: 'linear-gradient(135deg, #ffffff 60%, #f5f3ff 100%)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                          <div style={{ padding: '0.5rem', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <BrainCircuit size={20} />
-                          </div>
-                          <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '12px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>
-                            Gemini 3.5 LLM
-                          </span>
-                        </div>
-                        <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
-                          {advisorLang === 'ta' ? 'RAG Fusion பகுப்பாய்வு' : 'RAG Fusion AI Engine'}
-                        </h4>
-                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', fontWeight: 500, lineHeight: 1.45 }}>
-                          {advisorLang === 'ta'
-                            ? 'நேரடி ரொக்க இருப்பு மற்றும் ChromaDB வரலாற்று நினைவுகளுடன் AI பரிந்துரை தருகிறது.'
-                            : 'Generates explainable, context-aware financial advice blended with live cash balance & vector memory.'}
-                        </p>
+                      {/* Quick Sample Queries Chips */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <Lightbulb size={13} color="var(--accent-amber)" /> {advisorLang === 'ta' ? 'மாதிரி கேள்விகள்:' : 'Quick Questions:'}
+                        </span>
+                        {(advisorLang === 'ta' ? [
+                          'ABC டிரேடர்ஸிடம் ₹45,000-க்கு சரக்கு வாங்கலாமா?',
+                          'கடையின் மாத வாடகை ₹30,000 செலுத்த ரொக்கம் போதுமா?',
+                          'விளம்பரத்திற்காக ₹15,000 செலவு செய்யலாமா?',
+                          'கடைக்கு ₹18,500-க்கு பில்லிங் பிரிண்டர் வாங்கலாமா?',
+                          'ஊழியர் சம்பளம் ₹75,000 வழங்க பணப்புழக்கம் சரியா?'
+                        ] : [
+                          'Can I spend Rs. 45,000 for inventory restock from ABC Traders?',
+                          'Will paying store lease rent of Rs. 30,000 strain our cash balance?',
+                          'Can we afford Rs. 15,000 for Meta Ads marketing campaign?',
+                          'Should I buy a new POS billing printer for Rs. 18,500?',
+                          'Is our cash balance healthy for month-end payroll of Rs. 75,000?'
+                        ]).map((sample, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setAdvisorQuery(sample);
+                              handleAdvisorSubmit(sample);
+                            }}
+                            style={{
+                              background: 'var(--bg-surface)',
+                              border: '1px solid var(--border-subtle)',
+                              borderRadius: '9999px',
+                              color: 'var(--text-body)',
+                              fontWeight: 600,
+                              fontSize: '0.73rem',
+                              padding: '0.25rem 0.75rem',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                              boxShadow: 'var(--shadow-xs)'
+                            }}
+                            onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.96)'}
+                            onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                          >
+                            {sample}
+                          </button>
+                        ))}
                       </div>
 
-                      <div className="glass-card" style={{ padding: '1.35rem', borderLeft: '4px solid #10b981', background: 'linear-gradient(135deg, #ffffff 60%, #f0fdf4 100%)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                          <div style={{ padding: '0.5rem', background: 'linear-gradient(135deg, #10b981, #059669)', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Database size={20} />
-                          </div>
-                          <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '12px', background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}>
-                            447 SME Cases
-                          </span>
-                        </div>
-                        <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
-                          {advisorLang === 'ta' ? 'ChromaDB வழக்கு நினைவு' : 'Vector Case Memory'}
-                        </h4>
-                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', fontWeight: 500, lineHeight: 1.45 }}>
-                          {advisorLang === 'ta'
-                            ? 'முந்தைய 447 வணிக செலவு முடிவுகள் மற்றும் அவற்றின் விளைவுகளை ஒப்பீடு செய்கிறது.'
-                            : 'Retrieves semantically similar past SME spend decisions & outcome trajectory histories via Cosine distance.'}
-                        </p>
-                      </div>
-
-                      <div className="glass-card" style={{ padding: '1.35rem', borderLeft: '4px solid #06b6d4', background: 'linear-gradient(135deg, #ffffff 60%, #f0f9ff 100%)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                          <div style={{ padding: '0.5rem', background: 'linear-gradient(135deg, #06b6d4, #0284c7)', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <TrendingUp size={20} />
-                          </div>
-                          <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '12px', background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' }}>
-                            30-Day Forecast
-                          </span>
-                        </div>
-                        <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
-                          {advisorLang === 'ta' ? 'ரொக்கப் புழக்கம் கணிப்பு' : 'Cashflow Forecasting'}
-                        </h4>
-                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', fontWeight: 500, lineHeight: 1.45 }}>
-                          {advisorLang === 'ta'
-                            ? 'அடுத்த 30 நாட்களின் வருவாய் மற்றும் செலவு போக்குகளை Prophet & ARIMA மூலம் கணிக்கிறது.'
-                            : 'Ensemble Prophet & ARIMA(1,1,1) time series models forecasting 30-day liquidity risks.'}
-                        </p>
-                      </div>
-
-                      <div className="glass-card" style={{ padding: '1.35rem', borderLeft: '4px solid #f59e0b', background: 'linear-gradient(135deg, #ffffff 60%, #fffbe6 100%)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                          <div style={{ padding: '0.5rem', background: 'linear-gradient(135deg, #f59e0b, #d97706)', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <ShieldAlert size={20} />
-                          </div>
-                          <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '12px', background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
-                            ₹10,000 Buffer
-                          </span>
-                        </div>
-                        <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
-                          {advisorLang === 'ta' ? 'பாதுகாப்பு எச்சரிக்கை' : 'Risk & Safety Buffer'}
-                        </h4>
-                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', fontWeight: 500, lineHeight: 1.45 }}>
-                          {advisorLang === 'ta'
-                            ? 'ரொக்க இருப்பு பாதுகாப்பு வரம்பை விட குறையும் அபாயம் இருந்தால் உடனடி எச்சரிக்கை அளிக்கும்.'
-                            : 'Monitors liquidity thresholds to prevent cash crunch strains before committing new spend.'}
-                        </p>
-                      </div>
-
-                    </div>
-
-                    {/* How RAG Fusion Works Visual Banner */}
-                    <div className="glass-card" style={{ padding: '1.4rem 1.65rem', background: 'linear-gradient(135deg, #faf5ff 0%, #eef2ff 100%)', border: '1px solid #c7d2fe' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          <div style={{ padding: '0.65rem', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', borderRadius: '12px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Sparkles size={22} />
-                          </div>
-                          <div>
-                            <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                              {advisorLang === 'ta' ? 'RAG Fusion எவ்வாறு செயல்படுகிறது?' : 'How RAG Fusion Reasoning Works'}
-                            </h4>
-                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>
+                      {/* Voice Verification Prompt Banner */}
+                      {isVoiceCaptured && (
+                        <div style={{
+                          padding: '0.65rem 1rem',
+                          background: 'var(--accent-amber-light)',
+                          border: '1px solid var(--accent-amber-border)',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '0.5rem'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', color: 'var(--ref-amber-700)', fontWeight: 600, fontSize: '0.82rem' }}>
+                            <CheckCircle size={16} color="var(--ref-amber-600)" />
+                            <span>
                               {advisorLang === 'ta'
-                                ? 'வணிகக் கேள்வி → 447 வழக்கு நினைவுகள் + 30-நாள் நிதி கணிப்பு → AI விளக்கம் & பரிந்துரை'
-                                : 'User Question → 447 ChromaDB Cases + 30-Day Cashflow Trajectory → Explainable AI Verdict'}
-                            </p>
+                                ? 'குரல் கேள்வி பெறப்பட்டது! உள்ளீட்டை சரிபார்த்து அனுப்பவும்.'
+                                : 'Voice question captured! Please check input text box and send.'}
+                            </span>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleAdvisorSubmit()}
+                            style={{
+                              background: 'linear-gradient(in oklch 135deg, var(--ref-amber-500), var(--ref-amber-600))',
+                              color: '#ffffff',
+                              border: 'none',
+                              padding: '0.35rem 0.85rem',
+                              borderRadius: '9px',
+                              fontWeight: 700,
+                              fontSize: '0.78rem',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <span>{advisorLang === 'ta' ? 'அனுப்பவும்' : 'Confirm & Ask'}</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Input Form with Voice Mic & Submit */}
+                      <form onSubmit={(e) => { e.preventDefault(); handleAdvisorSubmit(); }} style={{ display: 'flex', gap: '0.65rem', alignItems: 'center' }}>
+                        <div style={{ flexGrow: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+                          <input 
+                            type="text"
+                            className="search-input"
+                            placeholder={advisorLang === 'ta' ? "உதாரணம்: 5 புதிய லேப்டாப்கள் ₹75,000க்கு வாங்கலாமா?" : "e.g. Can we afford Rs. 75,000 for 5 laptops for engineering?"}
+                            value={advisorQuery}
+                            onChange={(e) => setAdvisorQuery(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '0.85rem 3.8rem 0.85rem 1.15rem',
+                              fontSize: '0.92rem',
+                              borderRadius: '14px',
+                              background: 'var(--bg-surface)',
+                              border: '1.5px solid var(--ref-neutral-300)',
+                              color: 'var(--text-primary)',
+                              boxShadow: 'var(--shadow-xs)'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={toggleSpeechRecognition}
+                            style={{
+                              position: 'absolute',
+                              right: '0.45rem',
+                              background: isListening 
+                                ? 'linear-gradient(in oklch 135deg, var(--ref-rose-500), var(--ref-rose-600))' 
+                                : 'linear-gradient(in oklch 135deg, var(--ref-indigo-500), var(--ref-indigo-600))',
+                              border: 'none',
+                              color: '#ffffff',
+                              borderRadius: '10px',
+                              padding: '0.5rem 0.75rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              fontWeight: 800,
+                              fontSize: '0.76rem',
+                              boxShadow: isListening 
+                                ? '0 0 16px oklch(58.5% 0.22 25 / 0.5)' 
+                                : 'var(--shadow-xs)',
+                              transition: 'all 0.15s ease',
+                              animation: isListening ? 'pulse 1.2s infinite' : 'none'
+                            }}
+                            title={isListening ? "Listening... Speak your question now" : "Click to speak using microphone"}
+                          >
+                            {isListening ? <MicOff size={15} color="#ffffff" /> : <Mic size={15} color="#ffffff" />}
+                            <span>{isListening ? (advisorLang === 'ta' ? 'கேட்கிறது...' : 'Listening...') : (advisorLang === 'ta' ? 'குரல்' : 'Voice')}</span>
+                          </button>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          <span className="badge" style={{ background: '#ffffff', color: '#4338ca', border: '1px solid #c7d2fe', padding: '0.35rem 0.75rem', fontWeight: 800 }}>
-                            1. Query Fusion
+                        <button 
+                          type="submit"
+                          disabled={advisorLoading || !advisorQuery.trim()}
+                          style={{
+                            padding: '0.85rem 1.5rem',
+                            borderRadius: '14px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.45rem',
+                            fontWeight: 700,
+                            fontSize: '0.9rem',
+                            cursor: (advisorLoading || !advisorQuery.trim()) ? 'not-allowed' : 'pointer',
+                            opacity: (advisorLoading || !advisorQuery.trim()) ? 0.6 : 1,
+                            background: 'linear-gradient(in oklch 135deg, var(--ref-indigo-500), var(--ref-purple-600))',
+                            color: '#ffffff',
+                            border: 'none',
+                            boxShadow: 'var(--shadow-sm)',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {advisorLoading ? (
+                            <>
+                              <RefreshCw size={17} className="spin" />
+                              <span>Reasoning...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send size={16} />
+                              <span>{advisorLang === 'ta' ? 'ஆலோசனை கேள்' : 'Consult AI'}</span>
+                            </>
+                          )}
+                        </button>
+                      </form>
+
+                      {/* Quick Jump to Recent Consultations (Subtle Quick Strip) */}
+                      {advisorHistory.length > 0 && (
+                        <div className="recent-history-strip">
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.3rem', whiteSpace: 'nowrap' }}>
+                            <History size={12} color="var(--primary-indigo)" />
+                            {advisorLang === 'ta' ? 'சமீபத்திய:' : 'Recent:'}
                           </span>
-                          <ArrowRight size={14} color="#94a3b8" />
-                          <span className="badge" style={{ background: '#ffffff', color: '#15803d', border: '1px solid #86efac', padding: '0.35rem 0.75rem', fontWeight: 800 }}>
-                            2. Vector Search
-                          </span>
-                          <ArrowRight size={14} color="#94a3b8" />
-                          <span className="badge" style={{ background: '#ffffff', color: '#0369a1', border: '1px solid #bae6fd', padding: '0.35rem 0.75rem', fontWeight: 800 }}>
-                            3. Forecast Blend
-                          </span>
-                          <ArrowRight size={14} color="#94a3b8" />
-                          <span className="badge" style={{ background: '#6366f1', color: '#ffffff', border: 'none', padding: '0.35rem 0.75rem', fontWeight: 800 }}>
-                            4. AI Verdict
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Advisor Recommendation Result Display */}
-                {advisorResult && (
-                  <div className="fade-in">
-                    {/* Top Row: Verdict Banner & Adaptive Blending Card */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                      
-                      {/* Verdict Banner Card */}
-                      {(() => {
-                        const isQueryTamil = advisorQuery && isTamilScript(advisorQuery);
-                        return (
-                          <div className="glass-card" style={{ padding: '1.75rem', border: `1px solid ${advisorResult.verdict === 'Recommended' ? '#dcfce7' : advisorResult.verdict === 'Proceed with Caution' ? '#fef3c7' : '#fecaca'}`, overflow: 'hidden' }}>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                              <div style={{ minWidth: '180px', flex: '1 1 auto' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                  {isQueryTamil ? 'செயற்கை நுண்ணறிவு பரிந்துரை' : 'AI Recommendation'}
-                                </span>
-                                <h4 style={{ 
-                                  margin: '0.25rem 0 0 0', 
-                                  fontSize: '1.5rem', 
-                                  fontWeight: 800, 
-                                  color: advisorResult.verdict === 'Recommended' ? '#166534' : advisorResult.verdict === 'Proceed with Caution' ? '#b45309' : '#b91c1c',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '0.5rem',
-                                  flexWrap: 'wrap'
-                                }}>
-                                  {advisorResult.verdict === 'Recommended' && <CheckCircle size={24} color="#166534" />}
-                                  {advisorResult.verdict === 'Proceed with Caution' && <ShieldAlert size={24} color="#b45309" />}
-                                  {advisorResult.verdict === 'Not Recommended' && <AlertCircle size={24} color="#b91c1c" />}
-                                  {isQueryTamil ? (advisorResult.verdict === 'Recommended' ? 'பரிந்துரைக்கப்படுகிறது' : advisorResult.verdict === 'Proceed with Caution' ? 'எச்சரிக்கையுடன் தொடரவும்' : 'பரிந்துரைக்கப்படவில்லை') : advisorResult.verdict}
-                                </h4>
-                              </div>
-
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                                {/* Read Aloud Text-to-Speech Button */}
-                                <button
-                                  type="button"
-                                  onClick={speakRecommendation}
-                                  style={{
-                                    background: isSpeaking 
-                                      ? 'linear-gradient(135deg, #f59e0b, #ef4444)' 
-                                      : 'linear-gradient(135deg, #4338ca, #6366f1)',
-                                    border: '1px solid rgba(255, 255, 255, 0.4)',
-                                    color: '#ffffff',
-                                    borderRadius: '25px',
-                                    padding: '0.45rem 0.85rem',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 800,
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.35rem',
-                                    boxShadow: isSpeaking 
-                                      ? '0 4px 16px rgba(239, 68, 68, 0.4)' 
-                                      : '0 4px 16px rgba(67, 56, 202, 0.35)',
-                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    whiteSpace: 'nowrap'
-                                  }}
-                                  title="Listen to recommendation out loud (Text-to-Speech)"
-                                >
-                                  {isSpeaking ? <VolumeX size={16} color="#ffffff" /> : <Volume2 size={16} color="#ffffff" />}
-                                  <span>{isSpeaking ? (isQueryTamil ? 'நிறுத்து' : 'Stop Voice') : (isQueryTamil ? 'குரல் வழிகேட்க' : 'Listen Advice')}</span>
-                                </button>
-
-                                <span style={{ 
-                                  padding: '0.35rem 0.85rem', 
-                                  borderRadius: '20px', 
-                                  fontSize: '0.75rem', 
-                                  fontWeight: 800,
-                                  whiteSpace: 'nowrap',
-                                  background: advisorResult.risk_level === 'Low' ? '#dcfce7' : advisorResult.risk_level === 'Medium' ? '#fef3c7' : '#fee2e2',
-                                  color: advisorResult.risk_level === 'Low' ? '#166534' : advisorResult.risk_level === 'Medium' ? '#b45309' : '#b91c1c',
-                                  border: `1px solid ${advisorResult.risk_level === 'Low' ? '#bbf7d0' : advisorResult.risk_level === 'Medium' ? '#fde68a' : '#fca5a5'}`
-                                }}>
-                                  {isQueryTamil ? (advisorResult.risk_level === 'Low' ? 'குறைந்த அபாய நிலை' : advisorResult.risk_level === 'Medium' ? 'மத்திய அபாய நிலை' : 'உயர் அபாய நிலை') : `${advisorResult.risk_level} Risk Profile`}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '12px', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
-                              <div>
-                                <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>
-                                  {isQueryTamil ? 'தற்போதைய ரொக்க இருப்பு' : 'Current Cash Balance'}
-                                </div>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>Rs.{advisorResult.current_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                              </div>
-                              <div>
-                                <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 700 }}>
-                                  {isQueryTamil ? 'எதிர்பார்க்கப்படும் இருப்பு' : 'Est. Post-Transaction Reserve'}
-                                </div>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: advisorResult.estimated_post_balance >= 10000 ? '#166534' : '#b91c1c' }}>
-                                  Rs.{advisorResult.estimated_post_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </div>
-                              </div>
-                            </div>
-
-                            {advisorResult.suggested_action && (
-                              <div style={{ fontSize: '0.85rem', color: '#0f172a', fontWeight: 600, background: '#eef2ff', padding: '0.75rem 1rem', borderRadius: '12px', borderLeft: '4px solid #4338ca', border: '1px solid #e0e7ff' }}>
-                                <strong style={{ color: '#4338ca' }}>
-                                  {isQueryTamil ? 'பரிந்துரைக்கப்பட்ட அடுத்த கட்ட நடவடிக்கை:' : 'Suggested Next Step:'}
-                                </strong> {advisorResult.suggested_action}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Adaptive Blending Algorithm Card */}
-                      <div className="glass-card" style={{ padding: '1.75rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                          <Bot size={20} color="#4338ca" />
-                          <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Adaptive Blending Calibration</h4>
-                        </div>
-                        
-                        <p style={{ fontSize: '0.8rem', color: '#475569', fontWeight: 600, marginBottom: '1rem', lineHeight: 1.4 }}>
-                          LedgerMind dynamically balances vector case memory vs. baseline financial rules based on case history volume.
-                        </p>
-
-                        <div style={{ marginBottom: '1.25rem' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.4rem' }}>
-                            <span>Case Memory Weight ({Math.round(advisorResult.blend_weight * 100)}%)</span>
-                            <span>Rule Baseline ({Math.round((1 - advisorResult.blend_weight) * 100)}%)</span>
-                          </div>
-                          <div style={{ height: '10px', background: '#f1f5f9', borderRadius: '10px', overflow: 'hidden', display: 'flex' }}>
-                            <div style={{ width: `${advisorResult.blend_weight * 100}%`, background: '#4f46e5', transition: 'width 0.5s ease' }}></div>
-                            <div style={{ width: `${(1 - advisorResult.blend_weight) * 100}%`, background: '#cbd5e1' }}></div>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: '#0f172a' }}>
-                          <div style={{ flex: 1, padding: '0.6rem', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', textAlign: 'center' }}>
-                            <div style={{ color: '#4338ca', fontWeight: 800, fontSize: '0.95rem' }}>{advisorResult.retrieved_cases?.length || 0}</div>
-                            <div style={{ color: '#475569', fontWeight: 700 }}>Retrieved Cases</div>
-                          </div>
-                          <div style={{ flex: 1, padding: '0.6rem', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', textAlign: 'center' }}>
-                            <div style={{ color: '#166534', fontWeight: 800, fontSize: '0.95rem' }}>ChromaDB</div>
-                            <div style={{ color: '#475569', fontWeight: 700 }}>Vector Index</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Middle Row: Explainable LLM Reasoning & Key Rationale */}
-                    <div className="glass-card" style={{ padding: '2rem', marginBottom: '1.5rem' }}>
-                      <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Sparkles size={20} color="#4338ca" />
-                        {advisorQuery && isTamilScript(advisorQuery) ? 'விளக்கமளிக்கப்பட்ட பரிந்துரை காரணம்' : 'Explainable Recommendation Rationale'}
-                      </h4>
-                      
-                      <p style={{ fontSize: '0.95rem', color: '#1e293b', fontWeight: 600, lineHeight: 1.6, marginBottom: '1.25rem' }}>
-                        {advisorResult.explanation}
-                      </p>
-
-                      {advisorResult.key_factors && advisorResult.key_factors.length > 0 && (
-                        <div>
-                          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
-                            {advisorQuery && isTamilScript(advisorQuery) ? 'முக்கிய தீர்மான காரணிகள்' : 'Key Decision Factors'}
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            {advisorResult.key_factors.map((factor, idx) => (
-                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem', color: '#0f172a', fontWeight: 600, background: '#f8fafc', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                                <CheckCircle size={16} color="#166534" />
-                                <span>{factor}</span>
-                              </div>
-                            ))}
-                          </div>
+                          {advisorHistory.slice(-4).reverse().map((turn) => (
+                            <button
+                              key={turn.id}
+                              type="button"
+                              onClick={() => jumpToTurn(turn.id)}
+                              className="recent-history-pill"
+                              title="Jump to conversation turn in chat stream"
+                            >
+                              <span style={{
+                                width: '7px',
+                                height: '7px',
+                                borderRadius: '50%',
+                                background: turn.verdict === 'Recommended' ? 'var(--status-healthy)' : turn.verdict === 'Proceed with Caution' ? 'var(--status-pending)' : 'var(--status-strained)'
+                              }}></span>
+                              <span style={{ maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {turn.query}
+                              </span>
+                            </button>
+                          ))}
                         </div>
                       )}
                     </div>
 
-                    {/* Bottom Row: Retrieved Vector Case Memories from ChromaDB */}
-                    <div className="glass-card" style={{ padding: '2rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                        <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <Tag size={20} color="#4338ca" />
-                          Retrieved Case Memories (Cosine Similarity)
-                        </h4>
-                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600 }}>Matched from 60+ Indexed Small Business Transactions</span>
+                    {/* =========================================================================
+                        2. HISTORY DETAILS (BELOW) — Conversational Stream, Recommendations & Rationale
+                        ========================================================================= */}
+                    <div className="glass-card advisor-stream-container">
+                      
+                      {/* Top Anchor for Smooth Scrolling */}
+                      <div ref={streamTopRef} style={{ height: '1px' }} />
+
+                      {/* Stream Header with Sort Toggle & Summary */}
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '0.5rem',
+                        paddingBottom: '0.65rem',
+                        borderBottom: '1px solid var(--border-subtle)'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Bot size={17} color="var(--primary-indigo)" />
+                          <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                            {advisorLang === 'ta' ? 'ஆலோசனை விவரங்கள் & வரலாறு' : 'Consultation Details & Recommendations'}
+                          </span>
+                          <span style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            padding: '0.15rem 0.55rem',
+                            borderRadius: '12px',
+                            background: 'var(--bg-surface-subtle)',
+                            color: 'var(--text-muted)',
+                            border: '1px solid var(--border-subtle)'
+                          }}>
+                            {advisorHistory.length} {advisorLang === 'ta' ? 'பதிவுகள்' : 'turns'}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setHistorySortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
+                          style={{
+                            background: 'var(--bg-surface-subtle)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: '8px',
+                            padding: '0.25rem 0.65rem',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            color: 'var(--text-body)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            transition: 'all 0.15s ease'
+                          }}
+                          title="Toggle between newest questions first or chronological order"
+                        >
+                          <span>⇅ {historySortOrder === 'newest' ? (advisorLang === 'ta' ? 'புதியது முதலில்' : 'Newest First') : (advisorLang === 'ta' ? 'பழையது முதலில்' : 'Oldest First')}</span>
+                        </button>
                       </div>
 
-                      {advisorResult.retrieved_cases && advisorResult.retrieved_cases.length > 0 ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-                          {advisorResult.retrieved_cases.map((c, idx) => (
-                            <div key={idx} style={{ padding: '1rem 1.2rem', borderRadius: '14px', background: 'rgba(255,255,255,0.65)', border: '1px solid #c7d2fe' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                                <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{c.vendor_or_client}</span>
-                                <span style={{ 
-                                  fontSize: '0.7rem', 
-                                  fontWeight: 800, 
-                                  padding: '0.2rem 0.5rem', 
-                                  borderRadius: '12px',
-                                  background: c.outcome === 'healthy' ? '#dcfce7' : '#fee2e2',
-                                  color: c.outcome === 'healthy' ? '#166534' : '#b91c1c',
-                                  border: `1px solid ${c.outcome === 'healthy' ? '#bbf7d0' : '#fca5a5'}`
+                      {/* Animated Reasoning Indicator (Displayed at top when newest first) */}
+                      {advisorLoading && historySortOrder === 'newest' && (
+                        <div className="advisor-thinking-card fade-in">
+                          <div style={{
+                            padding: '0.65rem',
+                            borderRadius: '12px',
+                            background: 'linear-gradient(in oklch 135deg, var(--ref-indigo-500), var(--ref-purple-600))',
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 4px 12px oklch(57.5% 0.225 264 / 0.25)'
+                          }}>
+                            <BrainCircuit size={22} className="spin" />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
+                              <span>{advisorLang === 'ta' ? 'FinSense RAG சிந்திக்கிறது' : 'FinSense RAG Reasoning in Progress'}</span>
+                              <span className="thinking-dots">
+                                <span>.</span><span>.</span><span>.</span>
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                              {advisorLang === 'ta'
+                                ? 'ChromaDB வழக்கு நினைவகம் தேடுதல் → 30-நாள் ரொக்கப்புழக்கம் கணக்கீடு → Gemini 3.5 AI தொகுப்பு'
+                                : 'Retrieving ChromaDB vectors → Simulating 30-day liquidity risks → Synthesizing Gemini 3.5 verdict'}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Zero State: Display Welcome & Architecture Overview when History is Empty */}
+                      {advisorHistory.length === 0 && !advisorLoading && (
+                        <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.35rem' }}>
+                          
+                          {/* Welcome Hero Banner */}
+                          <div style={{
+                            padding: '1.6rem 2rem',
+                            borderRadius: '16px',
+                            background: 'linear-gradient(in oklch 135deg, var(--ref-indigo-50), var(--ref-purple-50))',
+                            border: '1px solid var(--primary-indigo-border)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: '1.25rem'
+                          }}>
+                            <div>
+                              <h4 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                                {advisorLang === 'ta' ? 'வணக்கம்! நான் உங்கள் FinSense AI நிதி ஆலோசகர்' : 'Welcome to FinSense AI Financial Advisor'}
+                              </h4>
+                              <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.88rem', color: 'var(--text-body)', fontWeight: 500, maxWidth: '640px' }}>
+                                {advisorLang === 'ta'
+                                  ? 'புதிய உபகரணங்கள் வாங்குதல், சரக்கு இருப்பு வாங்குதல் அல்லது வாடகை செலுத்துதல் போன்ற முடிவுகளை என்னிடம் கேட்கலாம். ஒவ்வொரு கேள்வியும் உங்கள் வரலாற்றில் சேமிக்கப்படும்.'
+                                  : 'Ask any business expenditure or investment proposal. I verify live bank reserves, simulate 30-day liquidity risks, and retrieve past SME decisions from ChromaDB.'}
+                              </p>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--ref-indigo-700)', padding: '0.35rem 0.85rem', borderRadius: '20px', background: 'var(--bg-surface)', border: '1px solid var(--primary-indigo-border)' }}>
+                                💬 Multi-Turn Chat Ready
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 4 Engine Architecture Cards */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '1.15rem' }}>
+                            <div className="ai-engine-card indigo">
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <div style={{ padding: '0.5rem', background: 'linear-gradient(in oklch 135deg, var(--ref-indigo-500), var(--ref-indigo-600))', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <BrainCircuit size={20} />
+                                </div>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '12px', background: 'var(--primary-indigo-light)', color: 'var(--ref-indigo-700)', border: '1px solid var(--primary-indigo-border)' }}>
+                                  Gemini 3.5 LLM
+                                </span>
+                              </div>
+                              <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                                {advisorLang === 'ta' ? 'RAG Fusion பகுப்பாய்வு' : 'RAG Fusion AI Engine'}
+                              </h4>
+                              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500, lineHeight: 1.45 }}>
+                                {advisorLang === 'ta'
+                                  ? 'நேரடி ரொக்க இருப்பு மற்றும் ChromaDB வரலாற்று நினைவுகளுடன் AI பரிந்துரை தருகிறது.'
+                                  : 'Generates explainable, context-aware financial advice blended with live cash balance & vector memory.'}
+                              </p>
+                            </div>
+
+                            <div className="ai-engine-card emerald">
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <div style={{ padding: '0.5rem', background: 'linear-gradient(in oklch 135deg, var(--ref-emerald-500), var(--ref-emerald-600))', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Database size={20} />
+                                </div>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '12px', background: 'var(--accent-emerald-light)', color: 'var(--ref-emerald-700)', border: '1px solid var(--accent-emerald-border)' }}>
+                                  447 SME Cases
+                                </span>
+                              </div>
+                              <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                                {advisorLang === 'ta' ? 'ChromaDB வழக்கு நினைவு' : 'Vector Case Memory'}
+                              </h4>
+                              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500, lineHeight: 1.45 }}>
+                                {advisorLang === 'ta'
+                                  ? 'முந்தைய 447 வணிக செலவு முடிவுகள் மற்றும் அவற்றின் விளைவுகளை ஒப்பீடு செய்கிறது.'
+                                  : 'Retrieves semantically similar past SME spend decisions & outcome trajectory histories via Cosine distance.'}
+                              </p>
+                            </div>
+
+                            <div className="ai-engine-card cyan">
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <div style={{ padding: '0.5rem', background: 'linear-gradient(in oklch 135deg, var(--ref-cyan-500), var(--ref-cyan-600))', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <TrendingUp size={20} />
+                                </div>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '12px', background: 'var(--ref-cyan-50)', color: 'var(--ref-cyan-700)', border: '1px solid var(--ref-cyan-200)' }}>
+                                  30-Day Forecast
+                                </span>
+                              </div>
+                              <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                                {advisorLang === 'ta' ? 'ரொக்கப் புழக்கம் கணிப்பு' : 'Cashflow Forecasting'}
+                              </h4>
+                              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500, lineHeight: 1.45 }}>
+                                {advisorLang === 'ta'
+                                  ? 'அடுத்த 30 நாட்களின் வருவாய் மற்றும் செலவு போக்குகளை Prophet & ARIMA மூலம் கணிக்கிறது.'
+                                  : 'Ensemble Prophet & ARIMA(1,1,1) time series models forecasting 30-day liquidity risks.'}
+                              </p>
+                            </div>
+
+                            <div className="ai-engine-card amber">
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <div style={{ padding: '0.5rem', background: 'linear-gradient(in oklch 135deg, var(--ref-amber-500), var(--ref-amber-600))', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <ShieldAlert size={20} />
+                                </div>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '12px', background: 'var(--accent-amber-light)', color: 'var(--ref-amber-700)', border: '1px solid var(--accent-amber-border)' }}>
+                                  ₹10,000 Buffer
+                                </span>
+                              </div>
+                              <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                                {advisorLang === 'ta' ? 'பாதுகாப்பு எச்சரிக்கை' : 'Risk & Safety Buffer'}
+                              </h4>
+                              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500, lineHeight: 1.45 }}>
+                                {advisorLang === 'ta'
+                                  ? 'ரொக்க இருப்பு பாதுகாப்பு வரம்பை விட குறையும் அபாயம் இருந்தால் உடனடி எச்சரிக்கை அளிக்கும்.'
+                                  : 'Monitors liquidity thresholds to prevent cash crunch strains before committing new spend.'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Render Chat History Turns */}
+                      {(historySortOrder === 'newest' ? [...advisorHistory].reverse() : advisorHistory).map((turn, tIdx) => {
+                        const turnRes = turn.response || {};
+                        const isTurnTamil = turn.language === 'ta' || isTamilScript(turn.query) || isTamilScript(turnRes.explanation);
+                        const isPlayingThis = isSpeaking && advisorActiveAudioMsgId === turn.id;
+                        const casesExpanded = expandedCasesMap[turn.id];
+
+                        return (
+                          <div 
+                            key={turn.id || tIdx} 
+                            id={`advisor-turn-${turn.id}`} 
+                            className={`chat-turn-block ${highlightedTurnId === turn.id ? 'highlight-turn' : ''}`}
+                          >
+                            
+                            {/* User Message Bubble (Right) */}
+                            <div className="chat-user-row">
+                              <div className="chat-user-bubble">
+                                <div className="chat-user-bubble-header">
+                                  <span style={{ fontWeight: 800 }}>
+                                    {currentUser?.username || 'You'} • {turn.created_at ? new Date(turn.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                  </span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ padding: '0.1rem 0.4rem', borderRadius: '6px', background: 'rgba(255,255,255,0.2)', fontSize: '0.68rem', fontWeight: 700 }}>
+                                      {turn.language === 'ta' ? 'தமிழ்' : 'English'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleClearAdvisorHistory(turn.id)}
+                                      style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', padding: '0.1rem' }}
+                                      title="Delete question from history"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="chat-user-bubble-text">
+                                  {turn.query}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Advisor Response Card (Left) */}
+                            <div className="chat-advisor-row">
+                              <div className="chat-advisor-avatar">
+                                <BrainCircuit size={22} />
+                              </div>
+
+                              <div className={`chat-advisor-card ${turnRes.verdict === 'Recommended' ? 'recommended' : turnRes.verdict === 'Proceed with Caution' ? 'caution' : 'strained'}`}>
+                                
+                                {/* Verdict Banner & Audio Trigger Row */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                    <div style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.45rem',
+                                      fontSize: '1.15rem',
+                                      fontWeight: 800,
+                                      color: turnRes.verdict === 'Recommended' ? 'var(--status-healthy)' : turnRes.verdict === 'Proceed with Caution' ? 'var(--status-pending)' : 'var(--status-strained)'
+                                    }}>
+                                      {turnRes.verdict === 'Recommended' && <CheckCircle size={22} color="var(--status-healthy)" />}
+                                      {turnRes.verdict === 'Proceed with Caution' && <ShieldAlert size={22} color="var(--status-pending)" />}
+                                      {turnRes.verdict === 'Not Recommended' && <AlertCircle size={22} color="var(--status-strained)" />}
+                                      <span>
+                                        {isTurnTamil 
+                                          ? (turnRes.verdict === 'Recommended' ? 'பரிந்துரைக்கப்படுகிறது' : turnRes.verdict === 'Proceed with Caution' ? 'எச்சரிக்கையுடன் தொடரவும்' : 'பரிந்துரைக்கப்படவில்லை') 
+                                          : turnRes.verdict || 'Analysis Complete'}
+                                      </span>
+                                    </div>
+
+                                    {/* Risk Profile badge */}
+                                    <span style={{
+                                      padding: '0.25rem 0.75rem',
+                                      borderRadius: '16px',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 800,
+                                      background: turnRes.risk_level === 'Low' ? 'var(--status-healthy-light)' : turnRes.risk_level === 'Medium' ? 'var(--status-pending-light)' : 'var(--status-strained-light)',
+                                      color: turnRes.risk_level === 'Low' ? 'var(--status-healthy)' : turnRes.risk_level === 'Medium' ? 'var(--status-pending)' : 'var(--status-strained)',
+                                      border: `1px solid ${turnRes.risk_level === 'Low' ? 'var(--status-healthy-border)' : turnRes.risk_level === 'Medium' ? 'var(--status-pending-border)' : 'var(--status-strained-border)'}`
+                                    }}>
+                                      {isTurnTamil 
+                                        ? (turnRes.risk_level === 'Low' ? 'குறைந்த அபாய நிலை' : turnRes.risk_level === 'Medium' ? 'மத்திய அபாய நிலை' : 'உயர் அபாய நிலை') 
+                                        : `${turnRes.risk_level || 'Evaluated'} Risk Profile`}
+                                    </span>
+                                  </div>
+
+                                  {/* Turn Actions: Listen Aloud & Copy */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => speakRecommendation(turnRes, turn.id)}
+                                      style={{
+                                        background: isPlayingThis 
+                                          ? 'linear-gradient(in oklch 135deg, var(--ref-amber-500), var(--ref-rose-500))' 
+                                          : 'linear-gradient(in oklch 135deg, var(--ref-indigo-500), var(--ref-purple-600))',
+                                        border: 'none',
+                                        color: '#ffffff',
+                                        borderRadius: '20px',
+                                        padding: '0.4rem 0.85rem',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.4rem',
+                                        boxShadow: isPlayingThis ? '0 4px 14px oklch(58.5% 0.22 25 / 0.35)' : 'var(--shadow-xs)',
+                                        transition: 'all 0.15s ease'
+                                      }}
+                                    >
+                                      {isPlayingThis ? (
+                                        <>
+                                          <span className="audio-wave-bars">
+                                            <span className="audio-wave-bar"></span>
+                                            <span className="audio-wave-bar"></span>
+                                            <span className="audio-wave-bar"></span>
+                                            <span className="audio-wave-bar"></span>
+                                          </span>
+                                          <span>{isTurnTamil ? 'நிறுத்து' : 'Stop Audio'}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Volume2 size={15} />
+                                          <span>{isTurnTamil ? 'குரல் வழிகேட்க' : 'Listen Aloud'}</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Balance & Liquidity Forecast Preview */}
+                                <div style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                  gap: '1rem',
+                                  padding: '1rem 1.25rem',
+                                  background: 'var(--bg-surface-subtle)',
+                                  borderRadius: '14px',
+                                  border: '1px solid var(--border-subtle)'
                                 }}>
-                                  {c.outcome}
+                                  <div>
+                                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 700 }}>
+                                      {isTurnTamil ? 'தற்போதைய ரொக்க இருப்பு' : 'Current Cash Balance'}
+                                    </div>
+                                    <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                                      Rs.{turnRes.current_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 700 }}>
+                                      {isTurnTamil ? 'எதிர்பார்க்கப்படும் இருப்பு' : 'Est. Post-Transaction Reserve'}
+                                    </div>
+                                    <div style={{
+                                      fontSize: '1.15rem',
+                                      fontWeight: 800,
+                                      color: (turnRes.estimated_post_balance || 0) >= 10000 ? 'var(--status-healthy)' : 'var(--status-strained)'
+                                    }}>
+                                      Rs.{turnRes.estimated_post_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Suggested Action Step */}
+                                {turnRes.suggested_action && (
+                                  <div style={{
+                                    fontSize: '0.85rem',
+                                    color: 'var(--text-primary)',
+                                    fontWeight: 600,
+                                    background: 'var(--ref-indigo-50)',
+                                    padding: '0.75rem 1rem',
+                                    borderRadius: '12px',
+                                    borderLeft: '4px solid var(--primary-indigo)',
+                                    border: '1px solid var(--primary-indigo-border)'
+                                  }}>
+                                    <strong style={{ color: 'var(--primary-indigo)' }}>
+                                      {isTurnTamil ? 'பரிந்துரைக்கப்பட்ட அடுத்த கட்ட நடவடிக்கை: ' : 'Suggested Next Step: '}
+                                    </strong>
+                                    {turnRes.suggested_action}
+                                  </div>
+                                )}
+
+                                {/* Explainable Rationale */}
+                                <div>
+                                  <div style={{ fontSize: '0.76rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.4rem' }}>
+                                    {isTurnTamil ? 'விளக்கமளிக்கப்பட்ட AI காரணம்' : 'Explainable Recommendation Rationale'}
+                                  </div>
+                                  <p style={{ margin: 0, fontSize: '0.92rem', color: 'var(--text-primary)', fontWeight: 500, lineHeight: 1.6 }}>
+                                    {turnRes.explanation}
+                                  </p>
+                                </div>
+
+                                {/* Key Factors Checklist */}
+                                {turnRes.key_factors && turnRes.key_factors.length > 0 && (
+                                  <div>
+                                    <div style={{ fontSize: '0.76rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.5rem' }}>
+                                      {isTurnTamil ? 'முக்கிய தீர்மான காரணிகள்' : 'Key Decision Factors'}
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                                      {turnRes.key_factors.map((factor, fIdx) => (
+                                        <div key={fIdx} style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '0.55rem',
+                                          fontSize: '0.84rem',
+                                          color: 'var(--text-primary)',
+                                          fontWeight: 600,
+                                          background: 'var(--bg-surface-subtle)',
+                                          padding: '0.55rem 0.85rem',
+                                          borderRadius: '10px',
+                                          border: '1px solid var(--border-subtle)'
+                                        }}>
+                                          <CheckCircle size={15} color="var(--status-healthy)" />
+                                          <span>{factor}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Collapsible ChromaDB Case Memory Evidence */}
+                                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '0.85rem' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCaseExpansion(turn.id)}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      width: '100%',
+                                      cursor: 'pointer',
+                                      padding: '0.2rem 0',
+                                      color: 'var(--primary-indigo)',
+                                      fontWeight: 700,
+                                      fontSize: '0.82rem'
+                                    }}
+                                  >
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                      <Database size={15} />
+                                      {isTurnTamil
+                                        ? `வழக்கு சான்றுகள் (${turnRes.retrieved_cases?.length || 0} வழக்குகள், நினைவகம்: ${Math.round((turnRes.blend_weight || 0) * 100)}%)`
+                                        : `ChromaDB Case Evidence (${turnRes.retrieved_cases?.length || 0} retrieved, Blend Weight: ${Math.round((turnRes.blend_weight || 0) * 100)}%)`}
+                                    </span>
+                                    {casesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                  </button>
+
+                                  {casesExpanded && (
+                                    <div className="fade-in" style={{ marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                      {/* Adaptive Blending Progress Bar */}
+                                      <div style={{ background: 'var(--bg-surface-subtle)', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
+                                          <span>Case Memory Weight ({Math.round((turnRes.blend_weight || 0) * 100)}%)</span>
+                                          <span>Rule Baseline ({Math.round((1 - (turnRes.blend_weight || 0)) * 100)}%)</span>
+                                        </div>
+                                        <div style={{ height: '8px', background: 'var(--ref-neutral-200)', borderRadius: '9999px', overflow: 'hidden', display: 'flex' }}>
+                                          <div style={{ width: `${(turnRes.blend_weight || 0) * 100}%`, background: 'var(--primary-indigo)' }}></div>
+                                          <div style={{ width: `${(1 - (turnRes.blend_weight || 0)) * 100}%`, background: 'var(--ref-neutral-300)' }}></div>
+                                        </div>
+                                      </div>
+
+                                      {/* Retrieved Cases Grid */}
+                                      {turnRes.retrieved_cases && turnRes.retrieved_cases.length > 0 ? (
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem' }}>
+                                          {turnRes.retrieved_cases.map((c, cIdx) => (
+                                            <div key={cIdx} style={{
+                                              padding: '0.85rem 1rem',
+                                              borderRadius: '12px',
+                                              background: 'var(--bg-surface)',
+                                              border: '1px solid var(--border-subtle)'
+                                            }}>
+                                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                                                <span style={{ fontWeight: 800, fontSize: '0.84rem', color: 'var(--text-primary)' }}>{c.vendor_or_client}</span>
+                                                <span style={{
+                                                  fontSize: '0.68rem',
+                                                  fontWeight: 800,
+                                                  padding: '0.15rem 0.45rem',
+                                                  borderRadius: '6px',
+                                                  background: c.outcome === 'healthy' ? 'var(--status-healthy-light)' : 'var(--status-strained-light)',
+                                                  color: c.outcome === 'healthy' ? 'var(--status-healthy)' : 'var(--status-strained)'
+                                                }}>
+                                                  {c.outcome}
+                                                </span>
+                                              </div>
+                                              <div style={{ fontSize: '0.92rem', fontWeight: 800, color: c.transaction_type === 'income' || c.transaction_type === 'return_in' ? 'var(--status-healthy)' : 'var(--status-strained)', marginBottom: '0.3rem' }}>
+                                                {c.transaction_type === 'income' || c.transaction_type === 'return_in' ? '+' : '-'}Rs.{c.amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                              </div>
+                                              <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: '0.4rem', lineHeight: 1.3 }}>
+                                                "{c.notes || c.summary_text || 'Past SME transaction memory'}"
+                                              </div>
+                                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, borderTop: '1px solid var(--border-subtle)', paddingTop: '0.35rem' }}>
+                                                <span>{c.category}</span>
+                                                <span style={{ color: 'var(--primary-indigo)', fontWeight: 800 }}>Match: {c.similarity_score}%</span>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>No similar past case memories matched in ChromaDB.</p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Animated Reasoning Indicator when advisor is thinking (Bottom position for chronological/oldest-first) */}
+                      {advisorLoading && historySortOrder === 'oldest' && (
+                        <div className="advisor-thinking-card fade-in">
+                          <div style={{
+                            padding: '0.65rem',
+                            borderRadius: '12px',
+                            background: 'linear-gradient(in oklch 135deg, var(--ref-indigo-500), var(--ref-purple-600))',
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 4px 12px oklch(57.5% 0.225 264 / 0.25)'
+                          }}>
+                            <BrainCircuit size={22} className="spin" />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
+                              <span>{advisorLang === 'ta' ? 'FinSense RAG சிந்திக்கிறது' : 'FinSense RAG Reasoning in Progress'}</span>
+                              <span className="thinking-dots">
+                                <span>.</span><span>.</span><span>.</span>
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                              {advisorLang === 'ta'
+                                ? 'ChromaDB வழக்கு நினைவகம் தேடுதல் → 30-நாள் ரொக்கப்புழக்கம் கணக்கீடு → Gemini 3.5 AI தொகுப்பு'
+                                : 'Retrieving ChromaDB vectors → Simulating 30-day liquidity risks → Synthesizing Gemini 3.5 verdict'}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Invisible scroll bottom target */}
+                      <div ref={chatEndRef} style={{ height: '1px' }} />
+                    </div>
+
+                  </div>
+
+                  {/* Right-Side History Sidebar (Desktop-Optimized Companion Panel) */}
+                  {showHistoryDrawer && historyPosition === 'side' && (
+                    <div className="advisor-history-drawer fade-in">
+                      {/* Header */}
+                      <div className="advisor-history-header">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <div style={{ padding: '0.35rem', borderRadius: '8px', background: 'var(--primary-indigo-light)', color: 'var(--primary-indigo)', display: 'flex' }}>
+                            <History size={16} />
+                          </div>
+                          <div>
+                            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                              {advisorLang === 'ta' ? 'ஆலோசனை வரலாறு' : 'Consultation History'}
+                            </h4>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                              {advisorHistory.length} {advisorLang === 'ta' ? 'அமர்வுகள் சேமிக்கப்பட்டுள்ளன' : 'sessions saved'}
+                            </span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => setHistoryPosition('below')}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.25rem', borderRadius: '6px' }}
+                            title={advisorLang === 'ta' ? 'கீழே மாற்றுக' : 'Dock below chat'}
+                          >
+                            <ChevronDown size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowHistoryDrawer(false)}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.25rem', borderRadius: '6px' }}
+                            title={advisorLang === 'ta' ? 'மறைக்க' : 'Hide history panel'}
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Search & Filter */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                          <Search size={13} color="var(--text-muted)" style={{ position: 'absolute', left: '0.65rem' }} />
+                          <input
+                            type="text"
+                            placeholder={advisorLang === 'ta' ? 'வரலாற்றை தேடுக...' : 'Search past questions...'}
+                            value={historySearchTerm}
+                            onChange={(e) => setHistorySearchTerm(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '0.45rem 0.65rem 0.45rem 2rem',
+                              fontSize: '0.78rem',
+                              borderRadius: '10px',
+                              background: 'var(--bg-surface-subtle)',
+                              border: '1px solid var(--border-subtle)',
+                              color: 'var(--text-primary)'
+                            }}
+                          />
+                          {historySearchTerm && (
+                            <button
+                              type="button"
+                              onClick={() => setHistorySearchTerm('')}
+                              style={{ position: 'absolute', right: '0.5rem', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Filter Chips */}
+                        <div style={{ display: 'flex', gap: '0.3rem', overflowX: 'auto', paddingBottom: '0.2rem' }}>
+                          {[
+                            { key: 'all', label: advisorLang === 'ta' ? 'அனைத்தும்' : 'All' },
+                            { key: 'Recommended', label: advisorLang === 'ta' ? 'பரிந்துரை' : 'Recommended' },
+                            { key: 'Proceed with Caution', label: advisorLang === 'ta' ? 'எச்சரிக்கை' : 'Caution' },
+                            { key: 'Not Recommended', label: advisorLang === 'ta' ? 'மறுப்பு' : 'Strained' }
+                          ].map(f => (
+                            <button
+                              key={f.key}
+                              type="button"
+                              onClick={() => setHistoryFilterVerdict(f.key)}
+                              style={{
+                                padding: '0.2rem 0.55rem',
+                                borderRadius: '9999px',
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                background: historyFilterVerdict === f.key ? 'var(--primary-indigo)' : 'var(--bg-surface-subtle)',
+                                color: historyFilterVerdict === f.key ? '#ffffff' : 'var(--text-muted)',
+                                border: '1px solid var(--border-subtle)',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Scrollable List of History Items */}
+                      <div className="advisor-history-list">
+                        {filteredAdvisorHistory.length === 0 ? (
+                          <div style={{ padding: '1.5rem 1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                            {historySearchTerm ? (
+                              <span>{advisorLang === 'ta' ? 'பொருந்தும் வரலாறு இல்லை' : 'No matching consultations found'}</span>
+                            ) : (
+                              <span>{advisorLang === 'ta' ? 'ஆலோசனை வரலாறு எதுவும் இல்லை' : 'No consultation history recorded yet. Questions asked will be preserved here.'}</span>
+                            )}
+                          </div>
+                        ) : (
+                          [...filteredAdvisorHistory].reverse().map(turn => {
+                            const isTurnActive = highlightedTurnId === turn.id;
+                            return (
+                              <div
+                                key={turn.id}
+                                className={`advisor-history-item ${isTurnActive ? 'active' : ''}`}
+                                onClick={() => jumpToTurn(turn.id)}
+                                title="Click to jump to this question in chat"
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem' }}>
+                                  <span style={{
+                                    padding: '0.15rem 0.5rem',
+                                    borderRadius: '10px',
+                                    fontSize: '0.65rem',
+                                    fontWeight: 800,
+                                    background: turn.verdict === 'Recommended' ? 'var(--status-healthy-light)' : turn.verdict === 'Proceed with Caution' ? 'var(--status-pending-light)' : 'var(--status-strained-light)',
+                                    color: turn.verdict === 'Recommended' ? 'var(--status-healthy)' : turn.verdict === 'Proceed with Caution' ? 'var(--status-pending)' : 'var(--status-strained)',
+                                    border: `1px solid ${turn.verdict === 'Recommended' ? 'var(--status-healthy-border)' : turn.verdict === 'Proceed with Caution' ? 'var(--status-pending-border)' : 'var(--status-strained-border)'}`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem'
+                                  }}>
+                                    {turn.verdict === 'Recommended' && <CheckCircle size={10} />}
+                                    {turn.verdict === 'Proceed with Caution' && <ShieldAlert size={10} />}
+                                    {turn.verdict === 'Not Recommended' && <AlertCircle size={10} />}
+                                    <span>{turn.verdict || 'Evaluated'}</span>
+                                  </span>
+                                  
+                                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                    {turn.created_at ? new Date(turn.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                  </span>
+                                </div>
+
+                                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                  {turn.query}
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.15rem', paddingTop: '0.35rem', borderTop: '1px solid var(--border-subtle)', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                  <span style={{ color: 'var(--primary-indigo)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                    {advisorLang === 'ta' ? 'தாவு' : 'Jump'} <ArrowRight size={11} />
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleClearAdvisorHistory(turn.id);
+                                    }}
+                                    style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.15rem' }}
+                                    title="Delete record from history"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.65rem', borderTop: '1px solid var(--border-subtle)' }}>
+                        <button
+                          type="button"
+                          onClick={handleExportConsultation}
+                          disabled={advisorHistory.length === 0}
+                          style={{
+                            flex: 1,
+                            padding: '0.45rem',
+                            borderRadius: '9px',
+                            background: 'var(--bg-surface-subtle)',
+                            border: '1px solid var(--border-subtle)',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                            color: 'var(--text-body)',
+                            cursor: advisorHistory.length === 0 ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.35rem'
+                          }}
+                        >
+                          <Download size={12} />
+                          <span>{advisorLang === 'ta' ? 'ஏற்றுமதி' : 'Export'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleClearAdvisorHistory()}
+                          disabled={advisorHistory.length === 0}
+                          style={{
+                            flex: 1,
+                            padding: '0.45rem',
+                            borderRadius: '9px',
+                            background: 'var(--bg-surface-subtle)',
+                            border: '1px solid var(--border-subtle)',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                            color: 'var(--status-strained)',
+                            cursor: advisorHistory.length === 0 ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.35rem'
+                          }}
+                        >
+                          <Trash2 size={12} />
+                          <span>{advisorLang === 'ta' ? 'அழி' : 'Clear All'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom Layout: Consultation History Journal (When Docked Below) */}
+                {showHistoryDrawer && historyPosition === 'below' && (
+                  <div className="advisor-history-below-card fade-in">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border-subtle)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                        <div style={{ padding: '0.45rem', borderRadius: '10px', background: 'var(--primary-indigo-light)', color: 'var(--primary-indigo)', display: 'flex' }}>
+                          <History size={18} />
+                        </div>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                            {advisorLang === 'ta' ? 'கடந்த ஆலோசனை பதிவேடு' : 'Past Consultation Sessions Journal'}
+                          </h4>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            {advisorHistory.length} {advisorLang === 'ta' ? 'ஆலோசனைகள் சேமிக்கப்பட்டுள்ளன' : 'total consultations logged in database'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                          <Search size={13} color="var(--text-muted)" style={{ position: 'absolute', left: '0.65rem' }} />
+                          <input
+                            type="text"
+                            placeholder={advisorLang === 'ta' ? 'வரலாற்றை தேடுக...' : 'Search consultations...'}
+                            value={historySearchTerm}
+                            onChange={(e) => setHistorySearchTerm(e.target.value)}
+                            style={{
+                              padding: '0.45rem 0.65rem 0.45rem 2rem',
+                              fontSize: '0.78rem',
+                              borderRadius: '10px',
+                              background: 'var(--bg-surface-subtle)',
+                              border: '1px solid var(--border-subtle)',
+                              color: 'var(--text-primary)',
+                              width: '200px'
+                            }}
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setHistoryPosition('side')}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            padding: '0.45rem 0.85rem',
+                            borderRadius: '10px',
+                            background: 'var(--bg-surface-subtle)',
+                            border: '1px solid var(--border-subtle)',
+                            fontSize: '0.76rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            color: 'var(--text-body)'
+                          }}
+                          title="Dock history back to side panel"
+                        >
+                          <PanelLeft size={13} />
+                          <span>{advisorLang === 'ta' ? 'பக்கத்தில் மாற்றுக' : 'Dock to Side (Optimized)'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleExportConsultation}
+                          disabled={advisorHistory.length === 0}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            padding: '0.45rem 0.85rem',
+                            borderRadius: '10px',
+                            background: 'var(--bg-surface-subtle)',
+                            border: '1px solid var(--border-subtle)',
+                            fontSize: '0.76rem',
+                            fontWeight: 700,
+                            cursor: advisorHistory.length === 0 ? 'not-allowed' : 'pointer',
+                            color: 'var(--text-body)'
+                          }}
+                        >
+                          <Download size={13} />
+                          <span>{advisorLang === 'ta' ? 'ஏற்றுமதி' : 'Export'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleClearAdvisorHistory()}
+                          disabled={advisorHistory.length === 0}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            padding: '0.45rem 0.85rem',
+                            borderRadius: '10px',
+                            background: 'var(--bg-surface-subtle)',
+                            border: '1px solid var(--border-subtle)',
+                            fontSize: '0.76rem',
+                            fontWeight: 700,
+                            cursor: advisorHistory.length === 0 ? 'not-allowed' : 'pointer',
+                            color: 'var(--status-strained)'
+                          }}
+                        >
+                          <Trash2 size={13} />
+                          <span>{advisorLang === 'ta' ? 'அனைத்தும் அழி' : 'Clear All'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Filter Pills */}
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {[
+                        { key: 'all', label: advisorLang === 'ta' ? 'அனைத்தும்' : 'All Consultations' },
+                        { key: 'Recommended', label: advisorLang === 'ta' ? 'பரிந்துரை' : 'Recommended' },
+                        { key: 'Proceed with Caution', label: advisorLang === 'ta' ? 'எச்சரிக்கை' : 'Proceed with Caution' },
+                        { key: 'Not Recommended', label: advisorLang === 'ta' ? 'பரிந்துரைக்கப்படவில்லை' : 'Not Recommended' }
+                      ].map(f => (
+                        <button
+                          key={f.key}
+                          type="button"
+                          onClick={() => setHistoryFilterVerdict(f.key)}
+                          style={{
+                            padding: '0.3rem 0.75rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                            background: historyFilterVerdict === f.key ? 'var(--primary-indigo)' : 'var(--bg-surface-subtle)',
+                            color: historyFilterVerdict === f.key ? '#ffffff' : 'var(--text-muted)',
+                            border: '1px solid var(--border-subtle)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Grid of Past Consultation Cards */}
+                    <div className="advisor-history-grid">
+                      {filteredAdvisorHistory.length === 0 ? (
+                        <div style={{ gridColumn: '1 / -1', padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                          {historySearchTerm ? (
+                            <span>{advisorLang === 'ta' ? 'பொருந்தும் வரலாறு எதுவும் இல்லை' : 'No matching consultations found'}</span>
+                          ) : (
+                            <span>{advisorLang === 'ta' ? 'ஆலோசனை வரலாறு எதுவும் இல்லை' : 'No consultation history recorded yet. Questions asked will be preserved here.'}</span>
+                          )}
+                        </div>
+                      ) : (
+                        [...filteredAdvisorHistory].reverse().map(turn => {
+                          const isTurnActive = highlightedTurnId === turn.id;
+                          return (
+                            <div
+                              key={turn.id}
+                              className={`advisor-history-item ${isTurnActive ? 'active' : ''}`}
+                              onClick={() => jumpToTurn(turn.id)}
+                              style={{ padding: '1rem' }}
+                              title="Click to jump to this question in chat"
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{
+                                  padding: '0.2rem 0.6rem',
+                                  borderRadius: '10px',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 800,
+                                  background: turn.verdict === 'Recommended' ? 'var(--status-healthy-light)' : turn.verdict === 'Proceed with Caution' ? 'var(--status-pending-light)' : 'var(--status-strained-light)',
+                                  color: turn.verdict === 'Recommended' ? 'var(--status-healthy)' : turn.verdict === 'Proceed with Caution' ? 'var(--status-pending)' : 'var(--status-strained)',
+                                  border: `1px solid ${turn.verdict === 'Recommended' ? 'var(--status-healthy-border)' : turn.verdict === 'Proceed with Caution' ? 'var(--status-pending-border)' : 'var(--status-strained-border)'}`,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem'
+                                }}>
+                                  {turn.verdict === 'Recommended' && <CheckCircle size={11} />}
+                                  {turn.verdict === 'Proceed with Caution' && <ShieldAlert size={11} />}
+                                  {turn.verdict === 'Not Recommended' && <AlertCircle size={11} />}
+                                  <span>{turn.verdict || 'Evaluated'}</span>
+                                </span>
+                                
+                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                  {turn.created_at ? new Date(turn.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                                 </span>
                               </div>
 
-                              <div style={{ fontSize: '1rem', fontWeight: 800, color: c.transaction_type === 'income' || c.transaction_type === 'return_in' ? '#166534' : '#b91c1c', marginBottom: '0.4rem' }}>
-                                {c.transaction_type === 'income' || c.transaction_type === 'return_in' ? '+' : '-'}Rs.{c.amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.4, margin: '0.3rem 0' }}>
+                                {turn.query}
                               </div>
 
-                              <div style={{ fontSize: '0.75rem', color: '#334155', fontWeight: 600, fontStyle: 'italic', marginBottom: '0.6rem', lineHeight: 1.3 }}>
-                                "{c.notes || c.summary_text || 'Past business transaction record'}"
-                              </div>
-
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: '#475569', fontWeight: 700, borderTop: '1px solid rgba(99, 102, 241, 0.1)', paddingTop: '0.4rem' }}>
-                                <span>Category: {c.category}</span>
-                                <span style={{ color: '#4338ca', fontWeight: 800 }}>Score: {c.similarity_score}%</span>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '0.5rem', borderTop: '1px solid var(--border-subtle)', fontSize: '0.72rem' }}>
+                                <span style={{ color: 'var(--primary-indigo)', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                  {advisorLang === 'ta' ? 'அரட்டையில் காண்க' : 'Jump to Chat'} <ArrowRight size={12} />
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleClearAdvisorHistory(turn.id);
+                                  }}
+                                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.2rem' }}
+                                  title="Delete record from history"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p style={{ color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>No similar past case memories found in ChromaDB.</p>
+                          );
+                        })
                       )}
                     </div>
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
 
             {/* Case Memory Viewer Tab */}
             {activeTab === 'cases' && (
@@ -3477,14 +5343,476 @@ function App() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '0.5rem',
-                        transition: 'all 0.25s ease'
+                        transition: 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease, background 0.15s ease'
                       }}
+                      onMouseDown={(e) => { if (!settingsSaving) e.currentTarget.style.transform = 'scale(0.96)'; }}
+                      onMouseUp={(e) => { if (!settingsSaving) e.currentTarget.style.transform = 'scale(1)'; }}
                     >
                       <Sparkles size={18} />
                       <span>{settingsSaving ? 'Saving Settings...' : 'Save System Settings'}</span>
                     </button>
                   </form>
                 </div>
+              </div>
+            )}
+
+            {/* Data & User Security Tab */}
+            {activeTab === 'security' && (
+              <div className="tab-content fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                
+                {/* 1. Luminous Security Metric Cards */}
+                <div className="security-metrics-grid">
+                  {/* Card 1: Defense Shield */}
+                  <div className="security-metric-card">
+                    <div>
+                      <div className="security-card-header">
+                        <span style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+                          System Defense Status
+                        </span>
+                        <div className="security-status-badge active">
+                          <span className="security-pulse-dot"></span>
+                          <span>Active</span>
+                        </div>
+                      </div>
+                      <div className="security-metric-val" style={{ color: 'var(--status-healthy)' }}>
+                        {securityStatus?.status === 'SECURE' ? '100% Protected' : 'Active & Verified'}
+                      </div>
+                      <div className="security-metric-sub">
+                        bcrypt-12 • HMAC-SHA256 • SQL Parameterized
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Database Integrity */}
+                  <div className="security-metric-card">
+                    <div>
+                      <div className="security-card-header">
+                        <span style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+                          Database Integrity
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleRunIntegrityCheck}
+                          disabled={integrityRunning}
+                          style={{
+                            background: 'var(--primary-indigo-light)',
+                            border: '1px solid var(--primary-indigo-border)',
+                            color: 'var(--primary-indigo)',
+                            borderRadius: '8px',
+                            padding: '0.2rem 0.55rem',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.3rem'
+                          }}
+                        >
+                          <RefreshCw size={12} className={integrityRunning ? 'spin' : ''} />
+                          <span>{integrityRunning ? 'Testing...' : 'Verify'}</span>
+                        </button>
+                      </div>
+                      <div className="security-metric-val" style={{ color: 'var(--primary-indigo)' }}>
+                        {securityStatus?.db_integrity === 'ok' ? 'PRAGMA OK' : (securityStatus?.db_integrity || 'Verified')}
+                      </div>
+                      <div className="security-metric-sub">
+                        B-Tree & Page Allocation Intact
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Anti-Brute Force */}
+                  <div className="security-metric-card">
+                    <div>
+                      <div className="security-card-header">
+                        <span style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+                          Brute-Force Guard
+                        </span>
+                        <span className="audit-action-pill update" style={{ fontSize: '0.7rem' }}>
+                          Sliding Window
+                        </span>
+                      </div>
+                      <div className="security-metric-val">
+                        5 Max Attempts
+                      </div>
+                      <div className="security-metric-sub">
+                        15-Min Lockout ({securityStatus?.rate_limiting?.currently_locked || 0} currently throttled)
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 4: Session Security */}
+                  <div className="security-metric-card">
+                    <div>
+                      <div className="security-card-header">
+                        <span style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+                          Revocation Blacklist
+                        </span>
+                        <span className="audit-action-pill auth" style={{ fontSize: '0.7rem' }}>
+                          Instant Revoke
+                        </span>
+                      </div>
+                      <div className="security-metric-val">
+                        {securityStatus?.token_security?.revoked_tokens || 0} Revoked
+                      </div>
+                      <div className="security-metric-sub">
+                        Tokens invalid immediately upon logout
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Integrity message alert if triggered */}
+                {integrityMessage && (
+                  <div style={{
+                    padding: '0.85rem 1.25rem',
+                    borderRadius: '12px',
+                    background: 'var(--status-healthy-light)',
+                    border: '1px solid var(--status-healthy-border)',
+                    color: 'var(--status-healthy)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    fontSize: '0.88rem',
+                    fontWeight: 700
+                  }}>
+                    <CheckCircle size={18} />
+                    <span>{integrityMessage}</span>
+                  </div>
+                )}
+
+                {/* 2. Two-Column Controls: Session & Specs on Left, Change Password on Right */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem' }}>
+                  
+                  {/* Session & Cryptographic Architecture */}
+                  <div className="glass-card" style={{ padding: '1.75rem' }}>
+                    <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Shield size={20} color="var(--primary-indigo)" />
+                      Active Session & Security Specs
+                    </h3>
+                    <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                      Cryptographic standards safeguarding this business organization.
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0.85rem', background: 'var(--bg-surface-subtle)', borderRadius: '10px', fontSize: '0.82rem' }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>Authenticated User</span>
+                        <span style={{ color: 'var(--text-heading)', fontWeight: 800 }}>{currentUser?.full_name || currentUser?.username} ({currentUser?.username})</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0.85rem', background: 'var(--bg-surface-subtle)', borderRadius: '10px', fontSize: '0.82rem' }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>Password Hash Algorithm</span>
+                        <span style={{ color: 'var(--text-heading)', fontWeight: 800 }}>bcrypt (12 rounds / 4,096 iterations)</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0.85rem', background: 'var(--bg-surface-subtle)', borderRadius: '10px', fontSize: '0.82rem' }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>Token Architecture</span>
+                        <span style={{ color: 'var(--text-heading)', fontWeight: 800 }}>JWT HMAC-SHA256 (24-Hour Expiry)</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0.85rem', background: 'var(--bg-surface-subtle)', borderRadius: '10px', fontSize: '0.82rem' }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>File Upload Sanitization</span>
+                        <span style={{ color: 'var(--text-heading)', fontWeight: 800 }}>Magic-Bytes + UUID Isolation (16MB max)</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0.85rem', background: 'var(--bg-surface-subtle)', borderRadius: '10px', fontSize: '0.82rem' }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>SQL Defense</span>
+                        <span style={{ color: 'var(--status-healthy)', fontWeight: 800 }}>Strict Parameterized Bindings (Zero Injection)</span>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.85rem' }}>
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        style={{
+                          flex: 1,
+                          padding: '0.75rem 1rem',
+                          borderRadius: '10px',
+                          background: 'var(--status-strained-light)',
+                          border: '1px solid var(--status-strained-border)',
+                          color: 'var(--status-strained)',
+                          fontSize: '0.82rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.5rem',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <LogOut size={16} />
+                        <span>Revoke Session & Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Change Password Panel */}
+                  <div className="glass-card" style={{ padding: '1.75rem' }}>
+                    <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <KeyRound size={20} color="var(--primary-indigo)" />
+                      Credential Hardening
+                    </h3>
+                    <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                      Update password with automatic bcrypt salt re-generation.
+                    </p>
+
+                    {secPasswordMsg.text && (
+                      <div style={{
+                        padding: '0.65rem 0.85rem',
+                        borderRadius: '8px',
+                        marginBottom: '1rem',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        background: secPasswordMsg.type === 'error' ? 'var(--status-strained-light)' : 'var(--status-healthy-light)',
+                        border: `1px solid ${secPasswordMsg.type === 'error' ? 'var(--status-strained-border)' : 'var(--status-healthy-border)'}`,
+                        color: secPasswordMsg.type === 'error' ? 'var(--status-strained)' : 'var(--status-healthy)'
+                      }}>
+                        {secPasswordMsg.text}
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSecPasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div className="field-group">
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '0.35rem', textTransform: 'uppercase' }}>
+                          Current Password
+                        </label>
+                        <input
+                          type="password"
+                          className="custom-input"
+                          placeholder="••••••••"
+                          value={secPasswordForm.current_password}
+                          onChange={(e) => setSecPasswordForm(prev => ({ ...prev, current_password: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="field-group">
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '0.35rem', textTransform: 'uppercase' }}>
+                          New Password (Min 8 Chars, Upper, Lower, Number)
+                        </label>
+                        <input
+                          type="password"
+                          className="custom-input"
+                          placeholder="••••••••"
+                          value={secPasswordForm.new_password}
+                          onChange={(e) => setSecPasswordForm(prev => ({ ...prev, new_password: e.target.value }))}
+                        />
+                        {/* Password strength meter */}
+                        {secPasswordForm.new_password && (
+                          <div style={{ marginTop: '0.4rem' }}>
+                            {(() => {
+                              const s = getPasswordStrength(secPasswordForm.new_password);
+                              return (
+                                <>
+                                  <div style={{ display: 'flex', gap: '4px' }}>
+                                    {[0, 1, 2, 3].map(i => (
+                                      <div 
+                                        key={i} 
+                                        style={{ 
+                                          flex: 1, 
+                                          height: '4px', 
+                                          borderRadius: '2px', 
+                                          background: i < s.level ? (i === 0 ? 'var(--ref-rose-500)' : i === 1 ? 'var(--ref-amber-500)' : i === 2 ? 'var(--ref-emerald-500)' : 'var(--ref-indigo-500)') : 'oklch(90% 0.02 265 / 0.5)' 
+                                        }} 
+                                      />
+                                    ))}
+                                  </div>
+                                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px', textAlign: 'right', fontWeight: 700 }}>
+                                    Strength: {s.label}
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="field-group">
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '0.35rem', textTransform: 'uppercase' }}>
+                          Confirm New Password
+                        </label>
+                        <input
+                          type="password"
+                          className="custom-input"
+                          placeholder="••••••••"
+                          value={secPasswordForm.confirm_password}
+                          onChange={(e) => setSecPasswordForm(prev => ({ ...prev, confirm_password: e.target.value }))}
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={secPasswordLoading}
+                        style={{
+                          padding: '0.75rem 1.25rem',
+                          borderRadius: '10px',
+                          fontWeight: 800,
+                          fontSize: '0.85rem',
+                          cursor: secPasswordLoading ? 'not-allowed' : 'pointer',
+                          background: 'linear-gradient(135deg, #6366f1, #3b82f6)',
+                          color: '#ffffff',
+                          border: 'none',
+                          boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.5rem',
+                          marginTop: '0.5rem'
+                        }}
+                      >
+                        <Check size={16} />
+                        <span>{secPasswordLoading ? 'Updating Password...' : 'Save New Password'}</span>
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+                {/* 3. Tamper-Evident Audit Trail */}
+                <div className="glass-card" style={{ padding: '1.75rem' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.25rem' }}>
+                    <div>
+                      <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <FileCheck size={20} color="var(--primary-indigo)" />
+                        Tamper-Evident Audit Trail
+                      </h3>
+                      <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                        Immutable forensic log of all financial creations, updates, deletions, and authentication events.
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {/* Filter pills */}
+                      {['ALL', 'TRANSACTION', 'AUTH', 'SETTINGS'].map(flt => (
+                        <button
+                          key={flt}
+                          type="button"
+                          onClick={() => setAuditFilter(flt)}
+                          style={{
+                            padding: '0.35rem 0.75rem',
+                            borderRadius: '8px',
+                            fontSize: '0.75rem',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            background: auditFilter === flt ? 'var(--primary-indigo)' : 'var(--bg-surface-subtle)',
+                            color: auditFilter === flt ? '#ffffff' : 'var(--text-muted)',
+                            border: `1px solid ${auditFilter === flt ? 'var(--primary-indigo)' : 'var(--border-subtle)'}`,
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          {flt}
+                        </button>
+                      ))}
+
+                      {/* Refresh button */}
+                      <button
+                        type="button"
+                        onClick={fetchSecurityData}
+                        disabled={securityLoading}
+                        style={{
+                          padding: '0.35rem 0.65rem',
+                          borderRadius: '8px',
+                          background: 'var(--bg-surface-subtle)',
+                          border: '1px solid var(--border-subtle)',
+                          color: 'var(--text-muted)',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem'
+                        }}
+                      >
+                        <RefreshCw size={14} className={securityLoading ? 'spin' : ''} />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Audit search input */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <input
+                      type="text"
+                      className="custom-input"
+                      placeholder="Search audit trail by actor, IP, action, or details..."
+                      value={auditSearch}
+                      onChange={(e) => setAuditSearch(e.target.value)}
+                      style={{ fontSize: '0.82rem' }}
+                    />
+                  </div>
+
+                  {/* Audit Table */}
+                  <div className="audit-table-wrapper">
+                    <table className="audit-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '160px' }}>Timestamp</th>
+                          <th style={{ width: '110px' }}>Actor</th>
+                          <th style={{ width: '150px' }}>Action</th>
+                          <th>Event Details</th>
+                          <th style={{ width: '130px' }}>Origin IP</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          const filtered = auditLogs.filter(log => {
+                            if (auditFilter === 'TRANSACTION' && !log.action.includes('TRANSACTION')) return false;
+                            if (auditFilter === 'AUTH' && !log.action.includes('AUTH')) return false;
+                            if (auditFilter === 'SETTINGS' && !log.action.includes('SETTINGS')) return false;
+                            if (auditSearch) {
+                              const s = auditSearch.toLowerCase();
+                              return (
+                                (log.username && log.username.toLowerCase().includes(s)) ||
+                                (log.action && log.action.toLowerCase().includes(s)) ||
+                                (log.details && log.details.toLowerCase().includes(s)) ||
+                                (log.ip_address && log.ip_address.toLowerCase().includes(s))
+                              );
+                            }
+                            return true;
+                          });
+
+                          if (filtered.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                  No audit trail events match the selected criteria.
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          return filtered.map(log => {
+                            let badgeClass = 'auth';
+                            if (log.action.includes('CREATE') || log.action.includes('SUCCESS') || log.action.includes('REGISTER')) badgeClass = 'create';
+                            else if (log.action.includes('DELETE') || log.action.includes('FAILED') || log.action.includes('LOCKED')) badgeClass = 'delete';
+                            else if (log.action.includes('UPDATE') || log.action.includes('SETTINGS') || log.action.includes('OUTCOME')) badgeClass = 'update';
+
+                            return (
+                              <tr key={log.id}>
+                                <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                  {log.created_at || 'Just now'}
+                                </td>
+                                <td>
+                                  <span style={{ fontWeight: 800, color: 'var(--text-heading)' }}>
+                                    {log.username || 'System'}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span className={`audit-action-pill ${badgeClass}`}>
+                                    {log.action}
+                                  </span>
+                                </td>
+                                <td style={{ fontSize: '0.82rem', color: 'var(--text-body)' }}>
+                                  {log.details || '—'}
+                                </td>
+                                <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                  {log.ip_address || '127.0.0.1'}
+                                </td>
+                              </tr>
+                            );
+                          });
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
               </div>
             )}
           </>

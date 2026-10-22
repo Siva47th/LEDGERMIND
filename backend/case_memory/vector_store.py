@@ -203,10 +203,12 @@ def add_case_memory(txn_id, vendor_or_client, amount, transaction_type, category
         return False
 
 
-def query_similar_cases(query_text, top_k=3):
+def query_similar_cases(query_text, top_k=3, transaction_type=None):
     """
     Performs semantic vector search across all indexed case memories
     and returns top_k relevant cases with similarity scores and outcome states.
+    Supports optional transaction_type filtering ('expense' vs 'income') to prevent
+    income cases from being cited as precedent for spending decisions, and vice versa.
     """
     try:
         _, col = get_vector_store()
@@ -214,10 +216,39 @@ def query_similar_cases(query_text, top_k=3):
         if col.count() == 0:
             seed_initial_cases()
 
-        results = col.query(
-            query_texts=[query_text],
-            n_results=min(top_k, col.count())
-        )
+        where_clause = None
+        if transaction_type:
+            tt = str(transaction_type).lower().strip()
+            if tt in ("expense", "spending", "outlay", "purchase", "spend", "debit", "cost"):
+                where_clause = {"transaction_type": {"$in": ["expense", "return_out"]}}
+            elif tt in ("income", "revenue", "receipt", "credit", "sales", "receive", "deposit"):
+                where_clause = {"transaction_type": {"$in": ["income", "return_in"]}}
+            elif tt in ("return_in", "return_out"):
+                where_clause = {"transaction_type": tt}
+            else:
+                # Safe fallback: if 'all', 'any', or unrecognized type passed,
+                # do not apply a bogus filter that matches 0 rows; run clean general search
+                # but log a diagnostic warning so developers can trace unexpected inputs.
+                if tt not in ("all", "any", "none", ""):
+                    print(f"[Case Memory Warning] Unrecognized transaction_type '{transaction_type}' received. Running unfiltered fallback.")
+                where_clause = None
+
+        query_kwargs = {
+            "query_texts": [query_text],
+            "n_results": min(max(top_k * 3, 10), col.count())
+        }
+        if where_clause:
+            query_kwargs["where"] = where_clause
+
+        results = col.query(**query_kwargs)
+
+        # Fallback to unfiltered search if filtered search returned 0 results
+        if (not results or not results.get("ids") or len(results["ids"][0]) == 0) and where_clause:
+            print(f"[Case Memory] No matches with filter {where_clause}. Falling back to general similarity.")
+            results = col.query(
+                query_texts=[query_text],
+                n_results=min(max(top_k * 3, 10), col.count())
+            )
 
         formatted_cases = []
         if results and "ids" in results and len(results["ids"][0]) > 0:
@@ -242,7 +273,10 @@ def query_similar_cases(query_text, top_k=3):
                     "summary_text": doc
                 })
 
-        return formatted_cases
+        # Deterministic sorting: highest similarity first, with case ID as strict tie-breaker
+        formatted_cases.sort(key=lambda c: (-c["similarity_score"], c["id"]))
+
+        return formatted_cases[:top_k]
     except Exception as e:
         print(f"[Case Memory Query Error] Search failed: {e}")
         return []

@@ -12,9 +12,6 @@ CSV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.a
 CSV_PATH = os.path.join(CSV_DIR, "historical_cashflow.csv")
 SIVAM_JSON_PATH = os.path.join(CSV_DIR, "sivam_traders_transactions.json")
 
-# Read starting balance from environment (single source of truth)
-STARTING_BALANCE = float(os.environ.get("STARTING_BALANCE", 250000.0))
-
 def generate_historical_cashflow(days=365):
     """
     Generates a daily cash flow time series for the past 'days' days,
@@ -24,6 +21,9 @@ def generate_historical_cashflow(days=365):
     - income / return_in  → adds to daily revenue
     - expense / return_out → adds to daily expense
     """
+    # Read starting balance fresh from environment each time (not cached at import)
+    # so that Settings API changes take effect without server restart
+    STARTING_BALANCE = float(os.environ.get("STARTING_BALANCE", 250000.0))
     os.makedirs(CSV_DIR, exist_ok=True)
 
     # 1. Fetch actual transactions from the SQLite database (with transaction_type)
@@ -50,8 +50,8 @@ def generate_historical_cashflow(days=365):
     else:
         print(f"[Data Gen] Warning: Database not found at {DB_PATH}. Generating baseline synthetic data only.")
 
-    # 1b. Overlay Sivam Traders persona transactions from JSON
-    if os.path.exists(SIVAM_JSON_PATH):
+    # 1b. Overlay Sivam Traders persona transactions from JSON ONLY if database was empty or not found
+    if len(actual_transactions) == 0 and os.path.exists(SIVAM_JSON_PATH):
         try:
             with open(SIVAM_JSON_PATH, "r", encoding="utf-8") as f:
                 sivam_data = json.load(f)
@@ -67,9 +67,11 @@ def generate_historical_cashflow(days=365):
                     "user_notes": txn.get("case_description", "")[:80]
                 })
                 sivam_count += 1
-            print(f"[Data Gen] Loaded {sivam_count} Sivam Traders persona transactions from JSON.")
+            print(f"[Data Gen] Loaded {sivam_count} Sivam Traders persona transactions from JSON (fallback).")
         except Exception as e:
             print(f"[Data Gen] Warning: Could not read Sivam Traders JSON: {e}")
+    elif len(actual_transactions) > 0:
+        print(f"[Data Gen] Using {sum(len(v) for v in actual_transactions.values())} transactions directly from database (skipping duplicate JSON overlay).")
     else:
         print(f"[Data Gen] Note: Sivam Traders JSON not found at {SIVAM_JSON_PATH}. Skipping persona overlay.")
 

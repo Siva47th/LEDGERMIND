@@ -74,9 +74,15 @@ def detect_transaction_anomalies():
             df.at[idx, "anomaly_reasons"] = reasons
 
     # 2. Machine Learning Isolation Forest (if at least 4 records exist)
+    #    Uses multiple features for genuine multivariate anomaly detection:
+    #    - amount: raw transaction value
+    #    - cat_encoded: category encoded as integer (different spend categories have different norms)
+    #    - day_of_week: temporal pattern (anomalies may cluster on unusual days)
     if len(df) >= 4:
         try:
-            X = df[["amount"]].values
+            df["cat_encoded"] = df["category"].astype("category").cat.codes
+            df["day_of_week"] = pd.to_datetime(df["date"], errors="coerce").dt.dayofweek.fillna(0).astype(int)
+            X = df[["amount", "cat_encoded", "day_of_week"]].values
             iso = IsolationForest(contamination=0.2, random_state=42)
             preds = iso.fit_predict(X)
             scores = iso.decision_function(X)

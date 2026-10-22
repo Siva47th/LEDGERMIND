@@ -142,3 +142,4 @@ parse_and_store_invoices = parse_and_store_transactions
 
 if __name__ == "__main__":
     parse_and_store_transactions()
+    

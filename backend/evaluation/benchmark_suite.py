@@ -129,7 +129,14 @@ def evaluate_nlp_extraction():
         type_precision = synth_type_p
 
     overall_precision = (vendor_precision + amount_precision + type_precision) / 3.0
-    overall_recall = overall_precision  # Balanced holdout set
+    # Recall: ratio of expected correct fields that were actually extracted correctly
+    # For vendor: how many of the samples had their vendor correctly extracted
+    # For amount: how many samples had their amount correctly extracted
+    # For type: how many samples had their type correctly extracted
+    vendor_recall = correct_vendor / total
+    amount_recall = correct_amount / total
+    type_recall = correct_type / total
+    overall_recall = (vendor_recall + amount_recall + type_recall) / 3.0
     f1_score = 2 * (overall_precision * overall_recall) / (overall_precision + overall_recall) if (overall_precision + overall_recall) > 0 else 0.0
 
     return {
@@ -150,7 +157,7 @@ def evaluate_forecasting_models():
     """
     try:
         data = get_forecasts()
-        eval_metrics = data.get("evaluation", {})
+        eval_metrics = data.get("metrics", {})  # Key is "metrics" from forecasting engine
         return {
             "prophet_mape_pct": round(float(eval_metrics.get("prophet_mape", 12.15)), 2),
             "arima_mape_pct": round(float(eval_metrics.get("arima_mape", 3.98)), 2),

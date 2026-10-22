@@ -1,10 +1,12 @@
 import os
 import sys
+import uuid
+import json
 import sqlite3
 import urllib.request
 import urllib.parse
 from datetime import datetime
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request, Response, g
 from flask_cors import CORS
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
@@ -25,13 +27,88 @@ from case_memory.vector_store import (
 from fusion_engine.rag_engine import generate_advisor_recommendation
 from evaluation.fraud_detector import detect_transaction_anomalies
 from evaluation.benchmark_suite import run_full_benchmark_suite
+from auth import (
+    auth_required,
+    register_user,
+    login_user,
+    get_user_profile,
+    change_user_password,
+    decode_token,
+    revoke_token,
+    log_audit_event,
+    get_recent_audit_logs,
+    get_security_health_status,
+    sanitize_text
+)
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
+
+# Request payload limit: 16 MB max to protect against Denial-of-Service / Memory Exhaustion attacks
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
 # Enable CORS for frontend connectivity
-CORS(app, expose_headers=["Content-Disposition"])
+CORS(app, expose_headers=["Content-Disposition"], supports_credentials=True)
+
+# Allowed file extensions for OCR upload
+ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'webp', 'tiff', 'bmp'}
+
+
+def get_client_ip():
+    """Extracts the true client IP address, respecting reverse proxies safely."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.remote_addr or "127.0.0.1"
+
+
+def validate_file_signature(file_stream, ext):
+    """
+    Verifies magic byte headers to prevent disguised executable or malicious file execution.
+    """
+    pos = file_stream.tell()
+    header = file_stream.read(16)
+    file_stream.seek(pos)
+
+    if ext == 'pdf':
+        return header.startswith(b'%PDF')
+    elif ext in ('jpg', 'jpeg'):
+        return header.startswith(b'\xff\xd8\xff')
+    elif ext == 'png':
+        return header.startswith(b'\x89PNG\r\n\x1a\n')
+    elif ext == 'webp':
+        return len(header) >= 12 and header.startswith(b'RIFF') and header[8:12] == b'WEBP'
+    elif ext == 'bmp':
+        return header.startswith(b'BM')
+    elif ext == 'tiff':
+        return header.startswith(b'II*\x00') or header.startswith(b'MM\x00*')
+    return False
+
+
+# =============================================================================
+# HTTP SECURITY HEADERS MIDDLEWARE — Defense-in-Depth
+# =============================================================================
+@app.after_request
+def apply_security_headers(response):
+    """Injects industry-standard HTTP security headers on all responses."""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(self), camera=()'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "img-src 'self' data: blob: https:; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' data: https://fonts.gstatic.com; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "connect-src 'self' http://localhost:* https:; "
+        "frame-ancestors 'none';"
+    )
+    return response
+
 
 DB_NAME = "finsense.db"
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), DB_NAME)
@@ -143,7 +220,202 @@ def health_check():
     }), status_code
 
 
+# =============================================================================
+# AUTHENTICATION ROUTES — Public (no @auth_required)
+# =============================================================================
+
+@app.route("/api/auth/register", methods=["POST"])
+def api_register():
+    """
+    Registers a new user account with bcrypt-hashed password.
+    Accepts: { username, password, full_name (optional) }
+    Returns: { success, user, token } — auto-login after registration.
+    
+    Security: Password is hashed with bcrypt (12 rounds, auto-salt)
+    before storage. Plaintext password is NEVER saved.
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "Missing request body"}), 400
+
+        username = data.get("username", "").strip()
+        password = data.get("password", "")
+        full_name = data.get("full_name", "").strip()
+        client_ip = get_client_ip()
+
+        result = register_user(username, password, full_name, ip_address=client_ip)
+
+        if result["success"]:
+            return jsonify(result), 201
+        else:
+            return jsonify(result), 400
+    except Exception as e:
+        print(f"[API Auth Error] Registration failed: {e}")
+        return jsonify({"error": f"Registration failed: {str(e)}"}), 500
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def api_login():
+    """
+    Authenticates a user with bcrypt password verification and brute-force protection.
+    Accepts: { username, password }
+    Returns: { success, user, token }
+    
+    Security:
+      - Max 5 failed attempts per 15 minutes before temporary lockout (HTTP 429)
+      - Timing-safe bcrypt comparison
+      - Generic error message to prevent username enumeration
+      - Full audit event logging
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "Missing request body"}), 400
+
+        username = data.get("username", "").strip()
+        password = data.get("password", "")
+        client_ip = get_client_ip()
+
+        result = login_user(username, password, ip_address=client_ip)
+
+        if result["success"]:
+            return jsonify(result), 200
+        else:
+            # Check if this failure was due to lockout
+            is_locked = "locked" in result.get("error", "").lower()
+            return jsonify(result), 429 if is_locked else 401
+    except Exception as e:
+        print(f"[API Auth Error] Login failed: {e}")
+        return jsonify({"error": f"Login failed: {str(e)}"}), 500
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+@auth_required
+def api_logout():
+    """
+    Terminates the user session by revoking the JWT token immediately.
+    Adds cryptographic hash to token_blacklist table and logs audit event.
+    """
+    try:
+        user = g.current_user
+        token = getattr(g, "current_token", None)
+        if token:
+            revoke_token(token, user["user_id"])
+
+        client_ip = get_client_ip()
+        log_audit_event(
+            user_id=user["user_id"],
+            username=user["username"],
+            action="AUTH_LOGOUT",
+            entity_type="user",
+            entity_id=str(user["user_id"]),
+            details="User logged out and session token was revoked",
+            ip_address=client_ip
+        )
+        return jsonify({"success": True, "message": "Successfully signed out and session revoked"}), 200
+    except Exception as e:
+        return jsonify({"error": f"Logout failed: {str(e)}"}), 500
+
+
+@app.route("/api/auth/profile", methods=["GET"])
+@auth_required
+def api_profile():
+    """
+    Returns the authenticated user's profile information.
+    Requires valid JWT token in Authorization header.
+    Password hash is NEVER included in the response.
+    """
+    user = g.current_user
+    profile = get_user_profile(user["user_id"])
+    if profile:
+        return jsonify(profile), 200
+    return jsonify({"error": "Profile not found"}), 404
+
+
+@app.route("/api/auth/change-password", methods=["PUT"])
+@auth_required
+def api_change_password():
+    """
+    Changes the authenticated user's password.
+    Accepts: { current_password, new_password }
+    Requires verification of current password before allowing change.
+    New password is hashed with fresh bcrypt salt before storage.
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "Missing request body"}), 400
+
+        current_password = data.get("current_password", "")
+        new_password = data.get("new_password", "")
+        client_ip = get_client_ip()
+
+        user = g.current_user
+        result = change_user_password(user["user_id"], current_password, new_password, ip_address=client_ip)
+
+        if result["success"]:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+    except Exception as e:
+        return jsonify({"error": f"Password change failed: {str(e)}"}), 500
+
+
+@app.route("/api/auth/verify", methods=["GET"])
+@auth_required
+def api_verify_token():
+    """
+    Verifies that the current JWT token is still valid.
+    Used by the frontend to check authentication state on page load.
+    Returns the authenticated user info if token is valid.
+    """
+    user = g.current_user
+    return jsonify({
+        "valid": True,
+        "user": user
+    }), 200
+
+
+# =============================================================================
+# SECURITY & COMPLIANCE ENDPOINTS — Auditing, Verification, Health Check
+# =============================================================================
+
+@app.route("/api/security/status", methods=["GET"])
+@auth_required
+def api_security_status():
+    """
+    Returns live cryptographic status, database integrity check,
+    rate limiter counters, and system totals.
+    """
+    status = get_security_health_status()
+    return jsonify(status), 200
+
+
+@app.route("/api/security/audit-logs", methods=["GET"])
+@auth_required
+def api_audit_logs():
+    """
+    Returns the latest audit trail logs for financial compliance & security review.
+    """
+    try:
+        limit = int(request.args.get("limit", 50))
+        limit = min(max(limit, 1), 200)
+        logs = get_recent_audit_logs(limit)
+        return jsonify({
+            "total_returned": len(logs),
+            "audit_logs": logs
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to retrieve audit logs: {str(e)}"}), 500
+
+
+# =============================================================================
+# PROTECTED API ROUTES — All require @auth_required
+# =============================================================================
+
 @app.route("/api/dashboard/stats", methods=["GET"])
+@auth_required
 def get_dashboard_stats():
     """
     Exposes aggregated statistics for the frontend dashboard cards and charts:
@@ -192,6 +464,15 @@ def get_dashboard_stats():
                 "value": cat["total"]
             })
 
+        # 4. Count transactions pending outcome review (new deferred outcome lifecycle)
+        cursor.execute("""
+            SELECT COUNT(*) as pending_count
+            FROM transactions
+            WHERE outcome_label = 'pending' AND (user_outcome IS NULL OR user_outcome = '')
+        """)
+        pending_row = cursor.fetchone()
+        pending_review_count = pending_row["pending_count"] if pending_row else 0
+
         conn.close()
 
         return jsonify({
@@ -200,7 +481,8 @@ def get_dashboard_stats():
             "total_expenses": total_expenses,
             "total_transactions": total_transactions,
             "risk_status": risk_status,
-            "category_spend": category_spend
+            "category_spend": category_spend,
+            "pending_review_count": pending_review_count
         }), 200
 
     except Exception as e:
@@ -208,6 +490,7 @@ def get_dashboard_stats():
 
 
 @app.route("/api/transactions", methods=["GET"])
+@auth_required
 def get_transactions():
     """
     Fetches transaction records from SQLite.
@@ -255,6 +538,8 @@ def get_transactions():
                 "outcome_label": row["outcome_label"] if row["outcome_label"] else "",
                 "user_notes": row["user_notes"] if row["user_notes"] else "",
                 "user_outcome": row["user_outcome"] if row["user_outcome"] else "",
+                "outcome_date": row["outcome_date"] if "outcome_date" in row.keys() and row["outcome_date"] else "",
+                "outcome_notes": row["outcome_notes"] if "outcome_notes" in row.keys() and row["outcome_notes"] else "",
                 "created_at": row["created_at"]
             })
 
@@ -265,39 +550,198 @@ def get_transactions():
         return jsonify({"error": f"Failed to fetch transactions: {e}"}), 500
 
 
+@app.route("/api/transactions/pending-review", methods=["GET"])
+@auth_required
+def get_pending_review_transactions():
+    """
+    Returns all transactions that still have outcome_label = 'pending' and no user_outcome set.
+    Sorted oldest-first so users review the oldest unresolved spends first.
+    This is the core 'come back later and evaluate' workflow.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM transactions
+            WHERE outcome_label = 'pending' AND (user_outcome IS NULL OR user_outcome = '')
+            ORDER BY date ASC, id ASC
+        """)
+        rows = cursor.fetchall()
+        conn.close()
+
+        pending = []
+        for row in rows:
+            pending.append({
+                "id": row["id"],
+                "vendor_or_client": row["vendor_or_client"],
+                "amount": row["amount"],
+                "transaction_type": row["transaction_type"],
+                "category": row["category"],
+                "date": row["date"],
+                "outcome_label": row["outcome_label"],
+                "user_notes": row["user_notes"] if row["user_notes"] else "",
+                "user_outcome": row["user_outcome"] if row["user_outcome"] else "",
+                "outcome_date": row["outcome_date"] if "outcome_date" in row.keys() and row["outcome_date"] else "",
+                "outcome_notes": row["outcome_notes"] if "outcome_notes" in row.keys() and row["outcome_notes"] else "",
+                "created_at": row["created_at"]
+            })
+
+        return jsonify({
+            "total_pending": len(pending),
+            "transactions": pending
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch pending review transactions: {e}"}), 500
+
+
+@app.route("/api/transactions/search", methods=["GET"])
+@auth_required
+def search_transactions():
+    """
+    Advanced search endpoint for finding old invoices by:
+    - vendor name (partial match)
+    - date range (date_from, date_to)
+    - amount range (amount_min, amount_max)
+    - category
+    - outcome status (pending / reviewed / all)
+    Enables the 'find that invoice from months ago' workflow.
+    """
+    try:
+        vendor = request.args.get("vendor", "").strip()
+        date_from = request.args.get("date_from", "").strip()
+        date_to = request.args.get("date_to", "").strip()
+        amount_min = request.args.get("amount_min", "").strip()
+        amount_max = request.args.get("amount_max", "").strip()
+        category = request.args.get("category", "").strip()
+        outcome_status = request.args.get("outcome_status", "all").strip().lower()
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        query = "SELECT * FROM transactions WHERE 1=1"
+        params = []
+
+        if vendor:
+            query += " AND vendor_or_client LIKE ?"
+            params.append(f"%{vendor}%")
+
+        if date_from:
+            query += " AND date >= ?"
+            params.append(date_from)
+
+        if date_to:
+            query += " AND date <= ?"
+            params.append(date_to)
+
+        if amount_min:
+            try:
+                params.append(float(amount_min))
+                query += " AND amount >= ?"
+            except ValueError:
+                pass
+
+        if amount_max:
+            try:
+                params.append(float(amount_max))
+                query += " AND amount <= ?"
+            except ValueError:
+                pass
+
+        if category and category != "All":
+            query += " AND category = ?"
+            params.append(category)
+
+        if outcome_status == "pending":
+            query += " AND outcome_label = 'pending' AND (user_outcome IS NULL OR user_outcome = '')"
+        elif outcome_status == "reviewed":
+            query += " AND (outcome_label != 'pending' OR (user_outcome IS NOT NULL AND user_outcome != ''))"
+
+        query += " ORDER BY date DESC, id DESC"
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+
+        results = []
+        for row in rows:
+            results.append({
+                "id": row["id"],
+                "vendor_or_client": row["vendor_or_client"],
+                "amount": row["amount"],
+                "transaction_type": row["transaction_type"],
+                "category": row["category"],
+                "date": row["date"],
+                "outcome_label": row["outcome_label"] if row["outcome_label"] else "",
+                "user_notes": row["user_notes"] if row["user_notes"] else "",
+                "user_outcome": row["user_outcome"] if row["user_outcome"] else "",
+                "outcome_date": row["outcome_date"] if "outcome_date" in row.keys() and row["outcome_date"] else "",
+                "outcome_notes": row["outcome_notes"] if "outcome_notes" in row.keys() and row["outcome_notes"] else "",
+                "created_at": row["created_at"]
+            })
+
+        return jsonify({
+            "total_results": len(results),
+            "transactions": results
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to search transactions: {e}"}), 500
+
+
 @app.route("/api/transactions/upload", methods=["POST"])
+@auth_required
 def upload_transaction():
     """
-    Handles file upload, triggers OCR + NLP (including transaction type classification),
-    persists in database, and returns the parsed result.
-    Balance is NOT stored — it's always calculated live.
+    Handles file upload, validates extension & magic bytes, triggers OCR + NLP,
+    persists in database with user ownership, and records audit trail.
+    Ensures safe temporary file cleanup in all execution branches.
     """
     if 'file' not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
     file = request.files['file']
-    if file.filename == '':
+    if not file or file.filename == '':
         return jsonify({"error": "Empty filename"}), 400
 
+    raw_filename = secure_filename(file.filename)
+    if not raw_filename or '.' not in raw_filename:
+        return jsonify({"error": "Invalid filename format"}), 400
+
+    ext = raw_filename.rsplit('.', 1)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return jsonify({
+            "error": f"File format '.{ext}' is not permitted. Allowed formats: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        }), 400
+
+    # Cryptographic / signature magic bytes check to block spoofed malicious files
+    if not validate_file_signature(file.stream, ext):
+        return jsonify({
+            "error": "File signature mismatch: The uploaded file does not match its expected format."
+        }), 400
+
+    # Unique collision-proof filename with UUID prefix
+    safe_filename = f"upload_{uuid.uuid4().hex[:12]}_{raw_filename}"
+    temp_path = os.path.join(UPLOAD_FOLDER, safe_filename)
+
     try:
-        # Save file to temp upload folder securely
-        filename = secure_filename(file.filename)
-        temp_path = os.path.join(UPLOAD_FOLDER, filename)
         file.save(temp_path)
-        print(f"[API Upload] File saved to {temp_path}")
+        print(f"[API Upload] File saved safely to {temp_path}")
 
         # 1. Run OCR/Direct PDF Ingestion
         extracted_text = extract_text_from_file(temp_path)
 
-        # 2. Run NLP Field Extraction (now includes transaction_type classification)
+        # 2. Run NLP Field Extraction
         parsed_fields = extract_fields(extracted_text)
-        vendor_or_client = parsed_fields["vendor"]
-        amount = parsed_fields["amount"]
-        date_str = parsed_fields["date"]
-        category = parsed_fields["category"]
-        transaction_type = parsed_fields["transaction_type"]
+        vendor_or_client = sanitize_text(parsed_fields.get("vendor", "Unknown Vendor"), 150)
+        try:
+            amount = float(parsed_fields.get("amount", 0.0))
+        except (ValueError, TypeError):
+            amount = 0.0
+        date_str = parsed_fields.get("date", datetime.today().strftime('%Y-%m-%d'))
+        category = sanitize_text(parsed_fields.get("category", "General"), 80)
+        transaction_type = parsed_fields.get("transaction_type", "expense")
+        user_id = g.current_user["user_id"]
 
-        # 3. Check for duplicates (same vendor/client, amount, date, transaction_type)
+        # 3. Check for duplicates
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
@@ -323,19 +767,14 @@ def upload_transaction():
                 "raw_text_preview": extracted_text[:300] + "..." if len(extracted_text) > 300 else extracted_text
             }), 200
 
-        # 4. Compute system outcome based on balance AFTER this transaction
-        current_bal = get_current_balance()
-        if transaction_type in ("income", "return_in"):
-            projected_balance = current_bal + amount
-        else:
-            projected_balance = current_bal - amount
-        outcome_label = "healthy" if projected_balance >= BALANCE_ALERT_THRESHOLD else "strained"
+        # 4. New uploads start with 'pending' outcome
+        outcome_label = "pending"
 
-        # 5. Save to database
+        # 5. Save to database with user_id
         cursor.execute("""
-            INSERT INTO transactions (vendor_or_client, amount, transaction_type, category, date, outcome_label)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (vendor_or_client, amount, transaction_type, category, date_str, outcome_label))
+            INSERT INTO transactions (vendor_or_client, amount, transaction_type, category, date, outcome_label, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (vendor_or_client, amount, transaction_type, category, date_str, outcome_label, user_id))
         conn.commit()
         new_id = cursor.lastrowid
         conn.close()
@@ -351,18 +790,21 @@ def upload_transaction():
             outcome=outcome_label
         )
 
-        # 7. Trigger forecasting dataset regeneration
+        # 7. Audit log event
+        log_audit_event(
+            user_id=user_id,
+            username=g.current_user["username"],
+            action="TRANSACTION_UPLOAD_OCR",
+            entity_type="transaction",
+            entity_id=str(new_id),
+            details=f"Uploaded invoice '{raw_filename}' -> {vendor_or_client} (Rs. {amount:,.2f})",
+            ip_address=get_client_ip()
+        )
+
+        # 8. Trigger forecasting dataset regeneration
         print("[API Upload] Rebuilding daily cashflow simulation...")
         generate_historical_cashflow()
 
-        # Clean up temporary uploaded file
-        try:
-            os.remove(temp_path)
-            print(f"[API Upload] Cleaned up temporary file: {temp_path}")
-        except Exception as err:
-            print(f"[API Upload] Failed to delete temp file: {err}")
-
-        # 7. Return the parsed result with live-calculated balance
         return jsonify({
             "id": new_id,
             "vendor_or_client": vendor_or_client,
@@ -379,54 +821,68 @@ def upload_transaction():
     except Exception as e:
         print(f"[API Upload Error] Ingestion failed: {e}")
         return jsonify({"error": f"Failed to ingest transaction: {str(e)}"}), 500
+    finally:
+        # Guarantee cleanup of temporary uploaded file in all paths
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+                print(f"[API Upload] Cleaned up temporary file: {temp_path}")
+            except Exception as err:
+                print(f"[API Upload] Failed to delete temp file: {err}")
 
 
 @app.route("/api/transactions/manual", methods=["POST"])
+@auth_required
 def add_manual_transaction():
     """
-    Accepts a manual transaction entry (income or expense):
-    - Inserts it directly into SQLite with the correct transaction_type
+    Accepts a manual transaction entry with strict input sanitization:
+    - Validates amount range, date format, and bounds
+    - Associates transaction with authenticated user_id
+    - Records tamper-evident audit log
     - Triggers cashflow timeline regeneration
-    - Returns the record with live-calculated balance
     """
     try:
         data = request.json
         if not data:
             return jsonify({"error": "Missing payload"}), 400
 
-        vendor_or_client = data.get("vendor_or_client", "Cash Transaction")
-        amount = float(data.get("amount", 0.0))
-        date_str = data.get("date")
-        category = data.get("category", "Miscellaneous")
-        transaction_type = data.get("transaction_type", "expense")
-        user_notes = data.get("user_notes", "")
+        vendor_or_client = sanitize_text(data.get("vendor_or_client", "Cash Transaction"), 150)
+        try:
+            amount = float(data.get("amount", 0.0))
+        except (ValueError, TypeError):
+            return jsonify({"error": "Amount must be a valid number"}), 400
 
+        if amount <= 0 or amount > 1_000_000_000:
+            return jsonify({"error": "Amount must be positive and under Rs. 1,000,000,000"}), 400
+
+        date_str = data.get("date")
         if not date_str:
             date_str = datetime.now().strftime("%Y-%m-%d")
+        else:
+            try:
+                datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                return jsonify({"error": "Invalid date format. Expected YYYY-MM-DD"}), 400
 
-        if amount <= 0:
-            return jsonify({"error": "Amount must be positive"}), 400
+        category = sanitize_text(data.get("category", "Miscellaneous"), 80)
+        transaction_type = data.get("transaction_type", "expense")
+        user_notes = sanitize_text(data.get("user_notes", ""), 1000)
+        user_id = g.current_user["user_id"]
 
         # Validate transaction_type
         valid_types = ("income", "expense", "return_in", "return_out")
         if transaction_type not in valid_types:
             return jsonify({"error": f"Invalid transaction_type. Must be one of: {valid_types}"}), 400
 
-        # Compute system outcome based on projected balance
-        current_bal = get_current_balance()
-        if transaction_type in ("income", "return_in"):
-            projected_balance = current_bal + amount
-        else:
-            projected_balance = current_bal - amount
-        outcome_label = "healthy" if projected_balance >= BALANCE_ALERT_THRESHOLD else "strained"
+        outcome_label = "pending"
 
-        # 1. Save to database
+        # 1. Save to database with user_id
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO transactions (vendor_or_client, amount, transaction_type, category, date, outcome_label, user_notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (vendor_or_client, amount, transaction_type, category, date_str, outcome_label, user_notes))
+            INSERT INTO transactions (vendor_or_client, amount, transaction_type, category, date, outcome_label, user_notes, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (vendor_or_client, amount, transaction_type, category, date_str, outcome_label, user_notes, user_id))
         conn.commit()
         new_id = cursor.lastrowid
         conn.close()
@@ -442,7 +898,18 @@ def add_manual_transaction():
             outcome=outcome_label
         )
 
-        # 3. Re-trigger forecasting CSV regeneration
+        # 3. Record audit event
+        log_audit_event(
+            user_id=user_id,
+            username=g.current_user["username"],
+            action="TRANSACTION_MANUAL_CREATE",
+            entity_type="transaction",
+            entity_id=str(new_id),
+            details=f"Created {transaction_type} of Rs. {amount:,.2f} for '{vendor_or_client}'",
+            ip_address=get_client_ip()
+        )
+
+        # 4. Re-trigger forecasting CSV regeneration
         print("[API Manual] Rebuilding daily cashflow simulation...")
         generate_historical_cashflow()
 
@@ -464,6 +931,7 @@ def add_manual_transaction():
 
 
 @app.route("/api/transactions/<int:txn_id>/notes", methods=["PUT"])
+@auth_required
 def update_transaction_notes(txn_id):
     """
     Updates the user_notes / spend experience of any transaction in the ledger
@@ -488,13 +956,21 @@ def update_transaction_notes(txn_id):
         if row:
             txn = dict(row)
             outcome_val = txn.get("user_outcome") or txn.get("outcome_label", "healthy")
+            out_note = (txn.get("outcome_notes") or "").strip()
+            if user_notes and out_note:
+                notes_combined = f"{user_notes} | Outcome: {out_note}"
+            elif user_notes:
+                notes_combined = user_notes
+            else:
+                notes_combined = out_note
+
             add_case_memory(
                 txn_id=txn["id"],
                 vendor_or_client=txn.get("vendor_or_client", ""),
                 amount=float(txn.get("amount", 0.0)),
                 transaction_type=txn.get("transaction_type", "expense"),
                 category=txn.get("category", "Miscellaneous"),
-                notes=user_notes,
+                notes=notes_combined,
                 outcome=outcome_val
             )
 
@@ -508,49 +984,98 @@ def update_transaction_notes(txn_id):
 
 
 @app.route("/api/transactions/<int:txn_id>/outcome", methods=["PUT"])
+@auth_required
 def update_transaction_outcome(txn_id):
     """
-    Updates the user_outcome label for a transaction.
-    This is a custom user-set label (e.g., 'Productive', 'Wasteful', 'Necessary')
-    that is separate from the system-computed outcome_label, and syncs to ChromaDB.
+    Records the user's real-world outcome evaluation for a transaction.
+    Accepts: user_outcome (the label), outcome_notes (what happened), outcome_date (when evaluated).
+    When user sets a real outcome, also updates outcome_label from 'pending' to the chosen value.
+    Syncs the updated outcome into ChromaDB vector case memory for AI learning.
     """
     try:
         data = request.json
         if not data:
             return jsonify({"error": "Missing payload"}), 400
 
-        user_outcome = data.get("user_outcome", "")
+        outcome_date = data.get("outcome_date", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("UPDATE transactions SET user_outcome = ? WHERE id = ?", (user_outcome, txn_id))
-        conn.commit()
 
+        # Fetch existing record first
         cursor.execute("SELECT * FROM transactions WHERE id = ?", (txn_id,))
         row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return jsonify({"error": f"Transaction #{txn_id} not found"}), 404
+
+        txn = dict(row)
+
+        # Do not wipe existing outcome if user is only updating notes
+        if "user_outcome" in data and data["user_outcome"]:
+            final_user_outcome = str(data["user_outcome"]).strip()
+            outcome_label_map = {
+                "Healthy": "healthy",
+                "Strained": "strained",
+                "Profitable": "profitable",
+                "Wasteful": "wasteful",
+                "Break-even": "break-even"
+            }
+            new_outcome_label = outcome_label_map.get(final_user_outcome, final_user_outcome.lower())
+        else:
+            final_user_outcome = txn.get("user_outcome", "")
+            new_outcome_label = txn.get("outcome_label", "pending")
+
+        # Do not wipe existing notes if user is only updating outcome
+        if "outcome_notes" in data and data["outcome_notes"] is not None:
+            final_outcome_notes = str(data["outcome_notes"]).strip()
+        else:
+            final_outcome_notes = txn.get("outcome_notes", "")
+
+        cursor.execute("""
+            UPDATE transactions 
+            SET user_outcome = ?, outcome_notes = ?, outcome_date = ?, outcome_label = ?
+            WHERE id = ?
+        """, (final_user_outcome, final_outcome_notes, outcome_date, new_outcome_label, txn_id))
+        conn.commit()
         conn.close()
 
-        if row:
-            txn = dict(row)
-            outcome_val = user_outcome if user_outcome else txn.get("outcome_label", "healthy")
-            add_case_memory(
-                txn_id=txn["id"],
-                vendor_or_client=txn.get("vendor_or_client", ""),
-                amount=float(txn.get("amount", 0.0)),
-                transaction_type=txn.get("transaction_type", "expense"),
-                category=txn.get("category", "Miscellaneous"),
-                notes=txn.get("user_notes", ""),
-                outcome=outcome_val
-            )
+        # Combine initial notes with outcome notes for rich vector case memory
+        init_note = (txn.get("user_notes") or "").strip()
+        if init_note and final_outcome_notes:
+            notes_combined = f"{init_note} | Outcome details: {final_outcome_notes}"
+        elif final_outcome_notes:
+            notes_combined = final_outcome_notes
+        else:
+            notes_combined = init_note
 
-        print(f"[API Outcome] Updated user_outcome for transaction #{txn_id} to '{user_outcome}' and synced to ChromaDB")
-        return jsonify({"success": True, "message": f"Outcome label updated to '{user_outcome}' and indexed in case memory"}), 200
+        outcome_val = final_user_outcome if final_user_outcome else new_outcome_label
+        add_case_memory(
+            txn_id=txn["id"],
+            vendor_or_client=txn.get("vendor_or_client", ""),
+            amount=float(txn.get("amount", 0.0)),
+            transaction_type=txn.get("transaction_type", "expense"),
+            category=txn.get("category", "Miscellaneous"),
+            notes=notes_combined,
+            outcome=outcome_val
+        )
+
+        print(f"[API Outcome] Updated outcome for transaction #{txn_id}: user_outcome='{final_user_outcome}', notes='{final_outcome_notes[:50]}...', synced to ChromaDB")
+        return jsonify({
+            "success": True,
+            "message": f"Outcome recorded as '{final_user_outcome}' with notes and indexed in case memory",
+            "outcome_label": new_outcome_label,
+            "user_outcome": final_user_outcome,
+            "outcome_notes": final_outcome_notes,
+            "outcome_date": outcome_date
+        }), 200
     except Exception as e:
         print(f"[API Outcome Error] Failed to update outcome: {e}")
         return jsonify({"error": f"Failed to update outcome label: {str(e)}"}), 500
 
 
 @app.route("/api/transactions/<int:txn_id>/type", methods=["PUT"])
+@auth_required
 def update_transaction_type(txn_id):
     """
     Updates the transaction_type (income/expense/return_in/return_out) of any transaction.
@@ -586,22 +1111,45 @@ def update_transaction_type(txn_id):
 
 
 @app.route("/api/transactions/<int:txn_id>", methods=["DELETE"])
+@auth_required
 def delete_transaction(txn_id):
     """
-    Deletes a transaction record from SQLite by ID.
+    Deletes a transaction record from SQLite by ID with audit logging.
     Triggers daily cashflow timeline regeneration.
     """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM transactions WHERE id = ?", (txn_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT * FROM transactions WHERE id = ?", (txn_id,))
+        row = cursor.fetchone()
+        if not row:
             conn.close()
             return jsonify({"error": f"Transaction #{txn_id} not found"}), 404
 
+        txn_record = dict(row)
         cursor.execute("DELETE FROM transactions WHERE id = ?", (txn_id,))
         conn.commit()
         conn.close()
+
+        # Audit log of transaction deletion
+        log_audit_event(
+            user_id=g.current_user["user_id"],
+            username=g.current_user["username"],
+            action="TRANSACTION_DELETE",
+            entity_type="transaction",
+            entity_id=str(txn_id),
+            details=f"Deleted transaction #{txn_id}: {txn_record.get('vendor_or_client')} (Rs. {float(txn_record.get('amount', 0)):,.2f})",
+            ip_address=get_client_ip()
+        )
+
+        # Also remove from ChromaDB vector store to prevent orphaned case memories
+        try:
+            from case_memory.vector_store import get_vector_store
+            _, col = get_vector_store()
+            col.delete(ids=[f"txn_{txn_id}"])
+            print(f"[API Delete] Removed txn_{txn_id} from ChromaDB vector store.")
+        except Exception as chroma_err:
+            print(f"[API Delete] ChromaDB cleanup warning (non-critical): {chroma_err}")
 
         print(f"[API Delete] Deleted transaction #{txn_id}. Rebuilding cashflow...")
         generate_historical_cashflow()
@@ -617,6 +1165,7 @@ def delete_transaction(txn_id):
 
 
 @app.route("/api/invoices/<int:txn_id>/pdf", methods=["GET"])
+@auth_required
 def download_invoice_pdf(txn_id):
     """
     Generates and streams an authentic, high-quality PDF Tax Invoice / Expense Voucher
@@ -816,6 +1365,7 @@ def download_invoice_pdf(txn_id):
 
 
 @app.route("/api/transactions/deduplicate", methods=["POST"])
+@auth_required
 def deduplicate_transactions():
     """
     Scans the database for duplicate transactions (same vendor_or_client, amount, date)
@@ -853,6 +1403,7 @@ def deduplicate_transactions():
 
 
 @app.route("/api/balance", methods=["GET"])
+@auth_required
 def get_balance():
     """
     Returns the current live-calculated balance and starting balance.
@@ -867,6 +1418,7 @@ def get_balance():
 
 
 @app.route("/api/forecast", methods=["GET"])
+@auth_required
 def get_cashflow_forecast():
     """
     Triggers the Prophet + ARIMA forecasting models and returns:
@@ -905,6 +1457,7 @@ def get_cashflow_forecast():
 
 
 @app.route("/api/cases", methods=["GET", "POST"])
+@auth_required
 def manage_cases():
     """
     GET: Returns all indexed small-business case memories from ChromaDB.
@@ -967,6 +1520,7 @@ def manage_cases():
 
 
 @app.route("/api/cases/query", methods=["POST"])
+@auth_required
 def query_cases():
     """
     Performs semantic vector search across all indexed case memories in ChromaDB.
@@ -994,12 +1548,13 @@ def query_cases():
 
 
 @app.route("/api/advisor/query", methods=["POST"])
+@auth_required
 def advisor_query():
     """
-    RAG Fusion Reasoning Engine Endpoint:
-    Accepts payload: { "query": "Should I purchase 5 laptops for Rs. 75,000?" }
+    RAG Fusion Reasoning Engine Endpoint with Multi-Turn Persistent Chat History:
+    Accepts payload: { "query": "Should I purchase 5 laptops for Rs. 75,000?", "language": "en" }
     Retrieves vector case memory, forecasts cashflow, applies adaptive blending,
-    and returns LLM explainable recommendation.
+    generates explainable advice, persists turn into advisor_chats, and logs an audit trail.
     """
     try:
         data = request.json
@@ -1011,13 +1566,166 @@ def advisor_query():
         language = data.get("language", "en")
 
         result = generate_advisor_recommendation(user_query=user_query, top_k=top_k, language=language)
+
+        # Persist conversation turn into SQLite advisor_chats table
+        user_id = g.current_user["user_id"] if (hasattr(g, 'current_user') and g.current_user) else 1
+        username = g.current_user.get("username", "admin") if (hasattr(g, 'current_user') and g.current_user) else "admin"
+        verdict = result.get("verdict", "Evaluated")
+        risk_level = result.get("risk_level", "Medium")
+        response_json_str = json.dumps(result, ensure_ascii=False)
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS advisor_chats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL DEFAULT 1,
+                query TEXT NOT NULL,
+                language TEXT DEFAULT 'en',
+                verdict TEXT,
+                risk_level TEXT,
+                response_json TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO advisor_chats (user_id, query, language, verdict, risk_level, response_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (user_id, user_query, language, verdict, risk_level, response_json_str))
+        conn.commit()
+        chat_id = cursor.lastrowid
+        cursor.execute("SELECT created_at FROM advisor_chats WHERE id = ?", (chat_id,))
+        row = cursor.fetchone()
+        created_at = row["created_at"] if row else datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        conn.close()
+
+        result["id"] = chat_id
+        result["user_id"] = user_id
+        result["created_at"] = created_at
+        result["query"] = user_query
+        result["language"] = language
+
+        # Audit the consultation event
+        log_audit_event(
+            user_id=user_id,
+            username=username,
+            action="ADVISOR_CONSULTATION",
+            entity_type="advisor_chat",
+            entity_id=str(chat_id),
+            details=f"Query: {user_query[:60]}... | Verdict: {verdict} | Risk: {risk_level}",
+            ip_address=get_client_ip()
+        )
+
         return jsonify(result), 200
     except Exception as e:
         print(f"[API Advisor Error] Fusion reasoning failed: {e}")
         return jsonify({"error": f"Advisor fusion engine failed: {str(e)}"}), 500
 
 
+@app.route("/api/advisor/history", methods=["GET"])
+@auth_required
+def get_advisor_history():
+    """
+    Retrieves chronological multi-turn chat history for the authenticated user.
+    """
+    try:
+        user_id = g.current_user["user_id"] if (hasattr(g, 'current_user') and g.current_user) else 1
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS advisor_chats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL DEFAULT 1,
+                query TEXT NOT NULL,
+                language TEXT DEFAULT 'en',
+                verdict TEXT,
+                risk_level TEXT,
+                response_json TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+
+        cursor.execute("""
+            SELECT id, user_id, query, language, verdict, risk_level, response_json, created_at
+            FROM advisor_chats
+            WHERE user_id = ?
+            ORDER BY id ASC
+        """, (user_id,))
+        rows = cursor.fetchall()
+        conn.close()
+
+        history = []
+        for r in rows:
+            try:
+                resp_obj = json.loads(r["response_json"])
+            except Exception:
+                resp_obj = {}
+            history.append({
+                "id": r["id"],
+                "user_id": r["user_id"],
+                "query": r["query"],
+                "language": r["language"] or "en",
+                "verdict": r["verdict"],
+                "risk_level": r["risk_level"],
+                "created_at": r["created_at"],
+                "response": resp_obj
+            })
+
+        return jsonify({
+            "total_messages": len(history),
+            "history": history
+        }), 200
+    except Exception as e:
+        print(f"[API Advisor History Error] Retrieval failed: {e}")
+        return jsonify({"error": f"Failed to retrieve advisor history: {str(e)}"}), 500
+
+
+@app.route("/api/advisor/history", methods=["DELETE"])
+@auth_required
+def clear_advisor_history():
+    """
+    Clears all chat history or deletes a specific message by id query param (?id=X).
+    """
+    try:
+        user_id = g.current_user["user_id"] if (hasattr(g, 'current_user') and g.current_user) else 1
+        username = g.current_user.get("username", "admin") if (hasattr(g, 'current_user') and g.current_user) else "admin"
+        target_id = request.args.get("id")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if target_id:
+            cursor.execute("DELETE FROM advisor_chats WHERE id = ? AND user_id = ?", (target_id, user_id))
+            action_desc = f"ADVISOR_MESSAGE_DELETED_{target_id}"
+            details_str = f"Deleted advisor message #{target_id}"
+        else:
+            cursor.execute("DELETE FROM advisor_chats WHERE user_id = ?", (user_id,))
+            action_desc = "ADVISOR_HISTORY_CLEARED"
+            details_str = f"Cleared full advisor chat history for user {username}"
+        conn.commit()
+        conn.close()
+
+        log_audit_event(
+            user_id=user_id,
+            username=username,
+            action=action_desc,
+            entity_type="advisor_chat",
+            entity_id=str(target_id or "all"),
+            details=details_str,
+            ip_address=get_client_ip()
+        )
+
+        return jsonify({
+            "message": "Advisor chat history updated successfully",
+            "deleted_id": target_id
+        }), 200
+    except Exception as e:
+        print(f"[API Advisor Clear History Error] Deletion failed: {e}")
+        return jsonify({"error": f"Failed to clear advisor history: {str(e)}"}), 500
+
+
 @app.route("/api/tts", methods=["GET"])
+@auth_required
 def text_to_speech_proxy():
     """
     High-Fidelity Neural Text-to-Speech Streaming Endpoint.
@@ -1048,6 +1756,7 @@ def text_to_speech_proxy():
 
 
 @app.route("/api/transactions/anomalies", methods=["GET"])
+@auth_required
 def get_anomalies():
     """
     Triggers the Fraud & Anomaly Detection engine (Isolation Forest + Statistical Z-score)
@@ -1067,6 +1776,7 @@ def get_anomalies():
 
 
 @app.route("/api/settings", methods=["GET", "PUT"])
+@auth_required
 def manage_settings():
     """
     Gets or updates system settings:
@@ -1111,6 +1821,7 @@ def manage_settings():
 
 
 @app.route("/api/evaluation/metrics", methods=["GET"])
+@auth_required
 def get_evaluation_metrics():
     """
     Runs quantitative system benchmarks (NLP F1-score, Forecasting MAPE, Vector Precision@K)
